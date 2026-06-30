@@ -1,0 +1,22 @@
+{
+  "targets": {
+    "debug": {
+      "outFile": "public/wasm/thumb.wasm",
+      "textFile": "public/wasm/thumb.wat",
+      "sourceMap": true,
+      "debug": true
+    },
+    "release": {
+      "outFile": "public/wasm/thumb.wasm",
+      "optimizeLevel": 3,
+      "shrinkLevel": 0,
+      "converge": false,
+      "noAssert": true
+    }
+  },
+  "options": {
+    "bindings": "raw",
+    "exportRuntime": false,
+    "runtime": "stub"
+  }
+}

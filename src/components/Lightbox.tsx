@@ -1,0 +1,152 @@
+import { useCallback, useEffect, useRef, useState } from "react";
+import { ChevronLeft, ChevronRight, X, Maximize2, Minimize2 } from "lucide-react";
+import type { ImageItem } from "@/lib/types";
+import { Button } from "./ui/button";
+import { cn, formatBytes, intToRgb } from "@/lib/utils";
+
+interface LightboxProps {
+  items: ImageItem[];
+  index: number;
+  onClose: () => void;
+  onNavigate: (index: number) => void;
+  loadOriginal: (id: string) => Promise<File | null>;
+}
+
+export function Lightbox({
+  items,
+  index,
+  onClose,
+  onNavigate,
+  loadOriginal,
+}: LightboxProps) {
+  const item = items[index];
+  const [fullUrl, setFullUrl] = useState<string | null>(null);
+  const [zoomed, setZoomed] = useState(false);
+  const urlRef = useRef<string | null>(null);
+
+  // Load the full-resolution original from OPFS for the current item.
+  useEffect(() => {
+    let alive = true;
+    setFullUrl(null);
+    setZoomed(false);
+    loadOriginal(item.id).then((file) => {
+      if (!alive) return;
+      if (urlRef.current) URL.revokeObjectURL(urlRef.current);
+      if (file) {
+        const url = URL.createObjectURL(file);
+        urlRef.current = url;
+        setFullUrl(url);
+      } else {
+        urlRef.current = null;
+      }
+    });
+    return () => {
+      alive = false;
+    };
+  }, [item.id, loadOriginal]);
+
+  useEffect(() => {
+    return () => {
+      if (urlRef.current) URL.revokeObjectURL(urlRef.current);
+    };
+  }, []);
+
+  const go = useCallback(
+    (delta: number) => {
+      const next = (index + delta + items.length) % items.length;
+      onNavigate(next);
+    },
+    [index, items.length, onNavigate]
+  );
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+      else if (e.key === "ArrowRight") go(1);
+      else if (e.key === "ArrowLeft") go(-1);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [go, onClose]);
+
+  const bg = intToRgb(item.dominant || 0x0f172a);
+
+  return (
+    <div className="animate-pop fixed inset-0 z-50 flex flex-col bg-slate-950/90 backdrop-blur-2xl">
+      {/* Top bar */}
+      <header className="z-10 flex items-center justify-between gap-4 px-5 py-4">
+        <div className="min-w-0">
+          <p className="truncate text-sm font-semibold text-slate-100">{item.name}</p>
+          <p className="truncate text-xs text-slate-400">
+            {item.width}×{item.height} · {formatBytes(item.size)} · {index + 1} / {items.length}
+          </p>
+        </div>
+        <div className="flex items-center gap-2">
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => setZoomed((z) => !z)}
+            title={zoomed ? "맞춤" : "100%"}
+          >
+            {zoomed ? <Minimize2 /> : <Maximize2 />}
+          </Button>
+          <Button variant="ghost" size="icon" onClick={onClose} title="닫기 (Esc)">
+            <X />
+          </Button>
+        </div>
+      </header>
+
+      {/* Stage */}
+      <div
+        className="relative flex flex-1 items-center justify-center overflow-auto px-4 pb-6"
+        onClick={(e) => {
+          if (e.target === e.currentTarget) onClose();
+        }}
+      >
+        {/* Placeholder color while the original loads */}
+        {!fullUrl && (
+          <div
+            className="absolute inset-x-10 inset-y-4 animate-pulse rounded-3xl opacity-40"
+            style={{ backgroundColor: bg }}
+          />
+        )}
+
+        <img
+          src={fullUrl ?? item.thumbUrl}
+          alt={item.name}
+          onClick={() => setZoomed((z) => !z)}
+          className={cn(
+            "rounded-2xl shadow-2xl shadow-black/60 transition-all duration-500 ease-spring",
+            zoomed
+              ? "max-w-none cursor-zoom-out"
+              : "max-h-full max-w-full cursor-zoom-in object-contain",
+            !fullUrl && "blur-sm"
+          )}
+          style={zoomed ? { width: item.width } : undefined}
+        />
+      </div>
+
+      {/* Nav buttons */}
+      {items.length > 1 && (
+        <>
+          <NavButton side="left" onClick={() => go(-1)} />
+          <NavButton side="right" onClick={() => go(1)} />
+        </>
+      )}
+    </div>
+  );
+}
+
+function NavButton({ side, onClick }: { side: "left" | "right"; onClick: () => void }) {
+  return (
+    <button
+      onClick={onClick}
+      className={cn(
+        "glass absolute top-1/2 -translate-y-1/2 grid size-12 place-items-center rounded-full text-slate-200 ring-1 ring-slate-700/60 transition-all duration-200 ease-spring hover:scale-110 hover:text-white active:scale-95",
+        side === "left" ? "left-5" : "right-5"
+      )}
+    >
+      {side === "left" ? <ChevronLeft className="size-6" /> : <ChevronRight className="size-6" />}
+    </button>
+  );
+}
