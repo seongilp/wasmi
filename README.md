@@ -3,12 +3,22 @@
 폴더를 드롭하면 동작하는 초고속 이미지 뷰어. **WASM** 썸네일 디코딩 + **OPFS** 캐시로,
 한 번 연 폴더는 새로고침해도 즉시 복원됩니다.
 
-### 🔗 라이브
+### 🔗 라이브 데모
 
 - **랜딩**: https://seongilp.github.io/wasmi/
 - **뷰어(바로 체험)**: https://seongilp.github.io/wasmi/app/
 
-![empty state](docs/empty.png)
+[![wasmi 랜딩 페이지](docs/landing.png)](https://seongilp.github.io/wasmi/)
+
+<p align="center"><sub>↑ 랜딩 페이지 — 클릭하면 라이브로 이동</sub></p>
+
+### 스크린샷
+
+| 그리드 (가상 스크롤) | 원본 라이트박스 |
+| --- | --- |
+| [![그리드](docs/grid.png)](https://seongilp.github.io/wasmi/app/) | [![라이트박스](docs/lightbox.png)](https://seongilp.github.io/wasmi/app/) |
+
+WASM으로 디코딩한 썸네일이 깔린 그리드(좌), OPFS에서 풀해상도 원본을 불러오는 라이트박스(우).
 
 ## 핵심 기술
 
