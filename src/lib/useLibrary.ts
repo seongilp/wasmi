@@ -221,7 +221,7 @@ export function useLibrary() {
       // match an existing (e.g. meta-restored) placeholder are re-processed in
       // place so favorites/organization survive.
       const newItems: ImageItem[] = [];
-      const jobs: { id: string; file: File }[] = [];
+      const jobs: { id: string; file: File; persistOriginal: boolean }[] = [];
       const seen = new Set<string>();
       const newRoots = new Map<string, FileSystemDirectoryHandle>();
       for (const { file, relPath, parent, root } of collected) {
@@ -230,10 +230,13 @@ export function useLibrary() {
         seen.add(id);
         if (parent) handlesRef.current.set(id, { parent, name: file.name });
         if (root && !rootsRef.current.has(root.name)) newRoots.set(root.name, root);
+        // Picker imports keep a disk handle → read originals from disk, DON'T
+        // copy them into OPFS (avoids duplicating huge libraries / crashing).
+        const persistOriginal = !parent;
         const existingIdx = indexRef.current.get(id);
         if (existingIdx !== undefined) {
           if (itemsRef.current[existingIdx].status === "ready") continue; // already have pixels
-          jobs.push({ id, file }); // fill existing placeholder, keep its favorite
+          jobs.push({ id, file, persistOriginal }); // fill placeholder, keep favorite
         } else {
           newItems.push({
             id,
@@ -250,7 +253,7 @@ export function useLibrary() {
             collections: [],
             trashed: false,
           });
-          jobs.push({ id, file });
+          jobs.push({ id, file, persistOriginal });
         }
       }
 
@@ -275,9 +278,9 @@ export function useLibrary() {
       const pool = getPool();
       let done = 0;
       await Promise.all(
-        jobs.map(({ id, file }) =>
+        jobs.map(({ id, file, persistOriginal }) =>
           pool
-            .process({ id, file, persistOriginal: true })
+            .process({ id, file, persistOriginal })
             .then((res) => {
               applyResult(res);
               done++;
@@ -588,9 +591,48 @@ export function useLibrary() {
     refreshUsage();
   }, [reindex, refreshUsage]);
 
-  const openOriginal = useCallback((id: string): Promise<File | null> => {
-    return readOriginal(id);
-  }, []);
+  // Navigate a persisted root down an item's relative path to its parent dir.
+  const resolveParent = useCallback(
+    async (id: string): Promise<{ parent: FileSystemDirectoryHandle; name: string } | null> => {
+      const idx = indexRef.current.get(id);
+      if (idx === undefined) return null;
+      const seg = itemsRef.current[idx].relPath.split("/");
+      const root = rootsRef.current.get(seg[0]);
+      if (!root) return null;
+      try {
+        const rw = { mode: "read" as const };
+        const perm = root as unknown as {
+          queryPermission(o: typeof rw): Promise<PermissionState>;
+          requestPermission(o: typeof rw): Promise<PermissionState>;
+        };
+        let state = await perm.queryPermission(rw);
+        if (state !== "granted") state = await perm.requestPermission(rw);
+        if (state !== "granted") return null;
+        let dir = root;
+        for (let i = 1; i < seg.length - 1; i++) dir = await dir.getDirectoryHandle(seg[i]);
+        return { parent: dir, name: seg[seg.length - 1] };
+      } catch {
+        return null;
+      }
+    },
+    []
+  );
+
+  // Read the full-res original: disk handle (picker) → persisted root → OPFS.
+  const openOriginal = useCallback(
+    async (id: string): Promise<File | null> => {
+      const h = handlesRef.current.get(id) ?? (await resolveParent(id));
+      if (h) {
+        try {
+          return await (await h.parent.getFileHandle(h.name)).getFile();
+        } catch {
+          /* moved/removed — fall through */
+        }
+      }
+      return readOriginal(id);
+    },
+    [resolveParent]
+  );
 
   const exportBackup = useCallback(() => exportLibrary(itemsRef.current), []);
   const exportMetaBackup = useCallback(() => buildMetaBackup(itemsRef.current), []);
