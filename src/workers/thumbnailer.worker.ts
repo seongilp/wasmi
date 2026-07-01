@@ -59,6 +59,46 @@ function fit(w: number, h: number, max: number): [number, number] {
   return [Math.max(1, Math.round(w * scale)), Math.max(1, Math.round(h * scale))];
 }
 
+const SIG_BYTES = 32 * 1024; // head + tail sample size for the signature
+
+function fnv1aHex(bytes: Uint8Array): string {
+  let h = 0x811c9dc5 >>> 0;
+  for (let i = 0; i < bytes.length; i++) {
+    h ^= bytes[i];
+    h = Math.imul(h, 0x01000193) >>> 0;
+  }
+  return h.toString(16).padStart(8, "0");
+}
+
+/**
+ * Stable content signature: size + first/last 32 KB, hashed. Two files with
+ * identical bytes always share it — memory-safe even for huge images since we
+ * never read the whole file. SHA-256 when available, FNV fallback otherwise.
+ */
+async function fileSignature(file: File): Promise<string> {
+  const head = new Uint8Array(await file.slice(0, SIG_BYTES).arrayBuffer());
+  const tail =
+    file.size > SIG_BYTES
+      ? new Uint8Array(await file.slice(file.size - SIG_BYTES).arrayBuffer())
+      : new Uint8Array(0);
+
+  const meta = new Uint8Array(8);
+  new DataView(meta.buffer).setFloat64(0, file.size);
+
+  const buf = new Uint8Array(meta.length + head.length + tail.length);
+  buf.set(meta, 0);
+  buf.set(head, meta.length);
+  buf.set(tail, meta.length + head.length);
+
+  if (crypto?.subtle) {
+    const digest = await crypto.subtle.digest("SHA-256", buf);
+    return Array.from(new Uint8Array(digest), (b) => b.toString(16).padStart(2, "0"))
+      .join("")
+      .slice(0, 32);
+  }
+  return `${file.size.toString(16)}-${fnv1aHex(head)}-${fnv1aHex(tail)}`;
+}
+
 async function makeThumb(
   wasm: WasmExports,
   file: File
@@ -105,7 +145,10 @@ self.onmessage = async (e: MessageEvent<ThumbRequest>) => {
   const { id, file, persistOriginal } = e.data;
   try {
     const wasm = await initWasm();
-    const { width, height, dominant, thumb } = await makeThumb(wasm, file);
+    const [{ width, height, dominant, thumb }, hash] = await Promise.all([
+      makeThumb(wasm, file),
+      fileSignature(file),
+    ]);
 
     // Persist results to OPFS for instant reloads. Persistence is best-effort:
     // if OPFS is unavailable we still return the thumbnail for display.
@@ -119,7 +162,7 @@ self.onmessage = async (e: MessageEvent<ThumbRequest>) => {
       /* no OPFS — in-memory only */
     }
 
-    const res: ThumbResponse = { id, ok: true, width, height, dominant, thumb };
+    const res: ThumbResponse = { id, ok: true, width, height, dominant, hash, thumb };
     self.postMessage(res);
   } catch (err) {
     const res: ThumbResponse = {

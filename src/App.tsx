@@ -6,10 +6,13 @@ import { ControlBar } from "./components/ControlBar";
 import { Grid } from "./components/Grid";
 import { EmptyState } from "./components/EmptyState";
 import { RestoreBanner } from "./components/RestoreBanner";
+import { DuplicateBar } from "./components/DuplicateBar";
 import { Lightbox } from "./components/Lightbox";
 import { useLibrary } from "./lib/useLibrary";
 import { ThumbPool } from "./lib/thumb-pool";
 import { applyView, listFolders, ALL_FOLDERS, type ViewState } from "./lib/view";
+import { findDuplicates } from "./lib/dedup";
+import type { ThumbBadge } from "./components/Thumb";
 import {
   collectFromDataTransfer,
   collectFromDirectoryPicker,
@@ -29,6 +32,7 @@ export default function App() {
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
   const [showRestore, setShowRestore] = useState(false);
   const [view, setView] = useState<ViewState>(DEFAULT_VIEW);
+  const [dupMode, setDupMode] = useState(false);
   const canPick = directoryPickerSupported();
 
   // Surface the trust banner once a restored-from-cache library is detected.
@@ -40,14 +44,31 @@ export default function App() {
   const visibleItems = useMemo(() => applyView(lib.items, view), [lib.items, view]);
   const folders = useMemo(() => listFolders(lib.items), [lib.items]);
   const favCount = useMemo(() => lib.items.filter((it) => it.favorite).length, [lib.items]);
+  const dup = useMemo(() => findDuplicates(lib.items), [lib.items]);
 
-  // Keep the lightbox index valid as the visible list changes (delete / filter).
+  // In duplicate mode, the grid/lightbox operate on the grouped duplicate list.
+  const activeItems = dupMode ? dup.ordered : visibleItems;
+
+  const dupBadges = useMemo(() => {
+    if (!dupMode) return undefined;
+    const m = new Map<string, ThumbBadge>();
+    for (const id of dup.keeperIds) m.set(id, "keep");
+    for (const id of dup.removableIds) m.set(id, "dupe");
+    return m;
+  }, [dupMode, dup]);
+
+  // Leave duplicate mode automatically once nothing is left to clean.
+  useEffect(() => {
+    if (dupMode && dup.removableIds.size === 0) setDupMode(false);
+  }, [dupMode, dup.removableIds.size]);
+
+  // Keep the lightbox index valid as the active list changes (delete / filter).
   useEffect(() => {
     if (lightboxIndex === null) return;
-    if (lightboxIndex >= visibleItems.length) {
-      setLightboxIndex(visibleItems.length > 0 ? visibleItems.length - 1 : null);
+    if (lightboxIndex >= activeItems.length) {
+      setLightboxIndex(activeItems.length > 0 ? activeItems.length - 1 : null);
     }
-  }, [visibleItems.length, lightboxIndex]);
+  }, [activeItems.length, lightboxIndex]);
 
   const patchView = useCallback((patch: Partial<ViewState>) => {
     setView((v) => ({ ...v, ...patch }));
@@ -72,14 +93,14 @@ export default function App() {
 
   const openById = useCallback(
     (id: string) => {
-      const idx = visibleItems.findIndex((it) => it.id === id);
+      const idx = activeItems.findIndex((it) => it.id === id);
       if (idx >= 0) setLightboxIndex(idx);
     },
-    [visibleItems]
+    [activeItems]
   );
 
   const hasItems = lib.items.length > 0;
-  const noResults = hasItems && visibleItems.length === 0;
+  const noResults = hasItems && !dupMode && visibleItems.length === 0;
 
   return (
     <Dropzone onDrop={handleDrop}>
@@ -116,6 +137,18 @@ export default function App() {
             shown={visibleItems.length}
             total={lib.items.length}
             favCount={favCount}
+            dupCount={dup.removableIds.size}
+            dupMode={dupMode}
+            onToggleDup={() => setDupMode((d) => !d)}
+          />
+        )}
+
+        {hasItems && dupMode && (
+          <DuplicateBar
+            groupCount={dup.groups.length}
+            removableCount={dup.removableIds.size}
+            onDeleteAll={() => lib.removeMany([...dup.removableIds])}
+            onExit={() => setDupMode(false)}
           />
         )}
 
@@ -138,7 +171,12 @@ export default function App() {
               </button>
             </div>
           ) : (
-            <Grid items={visibleItems} onOpen={openById} onToggleFavorite={lib.toggleFavorite} />
+            <Grid
+              items={activeItems}
+              onOpen={openById}
+              onToggleFavorite={lib.toggleFavorite}
+              badges={dupBadges}
+            />
           )}
         </main>
 
@@ -150,9 +188,9 @@ export default function App() {
         )}
       </div>
 
-      {lightboxIndex !== null && visibleItems[lightboxIndex] && (
+      {lightboxIndex !== null && activeItems[lightboxIndex] && (
         <Lightbox
-          items={visibleItems}
+          items={activeItems}
           index={lightboxIndex}
           onClose={() => setLightboxIndex(null)}
           onNavigate={setLightboxIndex}

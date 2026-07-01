@@ -15,6 +15,8 @@ export interface ImageItem {
   status: ImageStatus;
   /** User-starred. Persisted to the manifest. */
   favorite: boolean;
+  /** Content signature (size + head/tail bytes). Identical files share it. */
+  hash?: string;
   /** Object URL for the thumbnail (grid). Created on the main thread. */
   thumbUrl?: string;
 }
@@ -31,6 +33,7 @@ export interface ManifestItem {
   dominant: number;
   /** Optional for backward compatibility with older manifests. */
   favorite?: boolean;
+  hash?: string;
 }
 
 /** Message sent to the thumbnail worker. */
@@ -49,6 +52,7 @@ export type ThumbResponse =
       width: number;
       height: number;
       dominant: number;
+      hash: string;
       thumb: Blob;
     }
   | {

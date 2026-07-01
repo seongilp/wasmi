@@ -5,6 +5,7 @@ import {
   ArrowUp,
   ArrowDown,
   RectangleHorizontal,
+  Copy,
 } from "lucide-react";
 import { Dropdown, type DropdownOption } from "./ui/Dropdown";
 import { cn } from "@/lib/utils";
@@ -24,6 +25,9 @@ interface ControlBarProps {
   shown: number;
   total: number;
   favCount: number;
+  dupCount: number;
+  dupMode: boolean;
+  onToggleDup: () => void;
 }
 
 const sortOptions: DropdownOption<SortKey>[] = (
@@ -41,6 +45,9 @@ export function ControlBar({
   shown,
   total,
   favCount,
+  dupCount,
+  dupMode,
+  onToggleDup,
 }: ControlBarProps) {
   const folderOptions: DropdownOption<string>[] = [
     { value: ALL_FOLDERS, label: "모든 폴더" },
@@ -95,6 +102,32 @@ export function ControlBar({
           icon={RectangleHorizontal}
           ariaLabel="방향 필터"
         />
+
+        {/* Duplicate cleanup entry — only when copies exist */}
+        {(dupCount > 0 || dupMode) && (
+          <button
+            onClick={onToggleDup}
+            className={cn(
+              "flex h-8 items-center gap-1.5 rounded-lg border px-2.5 text-xs font-medium transition-colors duration-200 ease-spring",
+              dupMode
+                ? "border-rose-400/50 bg-rose-500/15 text-rose-200"
+                : "border-slate-700/60 bg-slate-800/60 text-slate-200 hover:bg-slate-700/60"
+            )}
+          >
+            <Copy className="size-3.5" />
+            중복
+            {dupCount > 0 && (
+              <span
+                className={cn(
+                  "tabular-nums",
+                  dupMode ? "text-rose-300/80" : "text-slate-500"
+                )}
+              >
+                {dupCount}
+              </span>
+            )}
+          </button>
+        )}
 
         <div className="mx-1 hidden text-xs tabular-nums text-slate-500 sm:block">
           {shown === total ? `${total.toLocaleString()}장` : `${shown.toLocaleString()} / ${total.toLocaleString()}`}

@@ -42,6 +42,7 @@ function toManifest(item: ImageItem): ManifestItem {
     height: item.height,
     dominant: item.dominant,
     favorite: item.favorite,
+    hash: item.hash,
   };
 }
 
@@ -111,6 +112,7 @@ export function useLibrary() {
         restored.push({
           ...m,
           favorite: m.favorite ?? false,
+          hash: m.hash,
           status: thumb ? "ready" : "pending",
           thumbUrl: thumb ? URL.createObjectURL(thumb) : undefined,
         });
@@ -150,6 +152,7 @@ export function useLibrary() {
           width: res.width,
           height: res.height,
           dominant: res.dominant,
+          hash: res.hash,
           thumbUrl: URL.createObjectURL(res.thumb),
         };
       } else {
@@ -253,6 +256,23 @@ export function useLibrary() {
     [persistManifest, reindex, refreshUsage]
   );
 
+  const removeMany = useCallback(
+    async (ids: string[]) => {
+      if (ids.length === 0) return;
+      const set = new Set(ids);
+      for (const it of itemsRef.current) {
+        if (set.has(it.id) && it.thumbUrl) URL.revokeObjectURL(it.thumbUrl);
+      }
+      itemsRef.current = itemsRef.current.filter((it) => !set.has(it.id));
+      reindex();
+      setItems(itemsRef.current.slice());
+      await Promise.all(ids.map((id) => deleteItem(id)));
+      await persistManifest();
+      refreshUsage();
+    },
+    [persistManifest, reindex, refreshUsage]
+  );
+
   const clear = useCallback(async () => {
     for (const it of itemsRef.current) {
       if (it.thumbUrl) URL.revokeObjectURL(it.thumbUrl);
@@ -277,5 +297,13 @@ export function useLibrary() {
     supported,
     restoredCount,
   };
-  return { ...state, importFiles, clear, openOriginal, toggleFavorite, removeItem };
+  return {
+    ...state,
+    importFiles,
+    clear,
+    openOriginal,
+    toggleFavorite,
+    removeItem,
+    removeMany,
+  };
 }

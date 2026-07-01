@@ -3,14 +3,17 @@ import { ImageOff, Star } from "lucide-react";
 import type { ImageItem } from "@/lib/types";
 import { cn, intToRgb } from "@/lib/utils";
 
+export type ThumbBadge = "keep" | "dupe";
+
 interface ThumbProps {
   item: ImageItem;
   size: number;
   onOpen: (id: string) => void;
   onToggleFavorite: (id: string) => void;
+  badge?: ThumbBadge;
 }
 
-function ThumbBase({ item, size, onOpen, onToggleFavorite }: ThumbProps) {
+function ThumbBase({ item, size, onOpen, onToggleFavorite, badge }: ThumbProps) {
   const [loaded, setLoaded] = useState(false);
   const bg = intToRgb(item.dominant || 0x1e293b);
 
@@ -18,7 +21,14 @@ function ThumbBase({ item, size, onOpen, onToggleFavorite }: ThumbProps) {
     <button
       onClick={() => item.status === "ready" && onOpen(item.id)}
       style={{ width: size, height: size, backgroundColor: bg }}
-      className="group relative overflow-hidden rounded-2xl ring-1 ring-slate-800/80 outline-none transition-[transform,box-shadow] duration-300 ease-spring hover:z-10 hover:-translate-y-0.5 hover:shadow-2xl hover:shadow-black/50 hover:ring-slate-600 focus-visible:ring-2 focus-visible:ring-sky-400"
+      className={cn(
+        "group relative overflow-hidden rounded-2xl outline-none ring-1 transition-[transform,box-shadow] duration-300 ease-spring hover:z-10 hover:-translate-y-0.5 hover:shadow-2xl hover:shadow-black/50 focus-visible:ring-2 focus-visible:ring-sky-400",
+        badge === "dupe"
+          ? "ring-2 ring-rose-500/70"
+          : badge === "keep"
+            ? "ring-2 ring-emerald-500/60"
+            : "ring-slate-800/80 hover:ring-slate-600"
+      )}
     >
       {item.status === "error" ? (
         <div className="flex h-full w-full items-center justify-center text-slate-500">
@@ -41,6 +51,18 @@ function ThumbBase({ item, size, onOpen, onToggleFavorite }: ThumbProps) {
       {/* Shimmer while pending */}
       {item.status === "pending" && (
         <div className="absolute inset-0 animate-pulse bg-gradient-to-br from-slate-800/40 to-slate-900/40" />
+      )}
+
+      {/* Duplicate-mode badge */}
+      {badge && (
+        <span
+          className={cn(
+            "absolute left-2 top-2 rounded-md px-1.5 py-0.5 text-[10px] font-semibold text-white backdrop-blur-sm",
+            badge === "dupe" ? "bg-rose-500/85" : "bg-emerald-500/85"
+          )}
+        >
+          {badge === "dupe" ? "중복" : "유지"}
+        </span>
       )}
 
       {/* Caption on hover */}
