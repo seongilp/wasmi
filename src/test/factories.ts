@@ -17,6 +17,7 @@ export function makeItem(overrides: Partial<ImageItem> = {}): ImageItem {
     dominant: 0x336699,
     status: "ready",
     favorite: false,
+    collections: [],
     ...overrides,
   };
 }

@@ -13,10 +13,42 @@ export interface ViewState {
   onlyFavorites: boolean;
   folder: string; // "" = 전체, "__root__" = 최상위, otherwise a top-level folder name
   orientation: Orientation;
+  /** When set, only images belonging to this user collection id. */
+  collection?: string;
 }
 
 export const ALL_FOLDERS = "";
 export const ROOT_FOLDER = "__root__";
+
+/** What the sidebar has selected — drives the base set shown in the grid. */
+export type Selection =
+  | { kind: "all" }
+  | { kind: "favorites" }
+  | { kind: "folder"; value: string }
+  | { kind: "collection"; id: string };
+
+export function selectionKey(s: Selection): string {
+  switch (s.kind) {
+    case "folder":
+      return `folder:${s.value}`;
+    case "collection":
+      return `collection:${s.id}`;
+    default:
+      return s.kind;
+  }
+}
+
+/** Map a sidebar selection onto the filter fields of a ViewState. */
+export function selectionToView(s: Selection): Pick<
+  ViewState,
+  "onlyFavorites" | "folder" | "collection"
+> {
+  return {
+    onlyFavorites: s.kind === "favorites",
+    folder: s.kind === "folder" ? s.value : ALL_FOLDERS,
+    collection: s.kind === "collection" ? s.id : undefined,
+  };
+}
 
 export const SORT_LABELS: Record<SortKey, string> = {
   date: "날짜",
@@ -78,6 +110,7 @@ function compare(a: ImageItem, b: ImageItem, key: SortKey): number {
 export function applyView(items: ImageItem[], v: ViewState): ImageItem[] {
   const filtered = items.filter((it) => {
     if (v.onlyFavorites && !it.favorite) return false;
+    if (v.collection && !it.collections.includes(v.collection)) return false;
     if (v.folder) {
       const f = topFolder(it.relPath);
       if (v.folder === ROOT_FOLDER ? f !== "" : f !== v.folder) return false;

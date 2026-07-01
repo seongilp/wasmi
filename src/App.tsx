@@ -9,9 +9,19 @@ import { RestoreBanner } from "./components/RestoreBanner";
 import { DuplicateBar } from "./components/DuplicateBar";
 import { Lightbox } from "./components/Lightbox";
 import { Editor } from "./components/Editor";
+import { Sidebar } from "./components/Sidebar";
 import { useLibrary } from "./lib/useLibrary";
 import { ThumbPool } from "./lib/thumb-pool";
-import { applyView, listFolders, ALL_FOLDERS, type ViewState } from "./lib/view";
+import {
+  applyView,
+  listFolders,
+  topFolder,
+  selectionToView,
+  ALL_FOLDERS,
+  ROOT_FOLDER,
+  type ViewState,
+  type Selection,
+} from "./lib/view";
 import { findDuplicates, type DupMode } from "./lib/dedup";
 import type { ThumbBadge } from "./components/Thumb";
 import {
@@ -33,6 +43,7 @@ export default function App() {
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
   const [showRestore, setShowRestore] = useState(false);
   const [view, setView] = useState<ViewState>(DEFAULT_VIEW);
+  const [selection, setSelection] = useState<Selection>({ kind: "all" });
   const [dupMode, setDupMode] = useState(false);
   const [dupKind, setDupKind] = useState<DupMode>("exact");
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -46,11 +57,60 @@ export default function App() {
     if (lib.ready && lib.restoredCount > 0) setShowRestore(true);
   }, [lib.ready, lib.restoredCount]);
 
+  // Sidebar selection is merged into the view's filter fields.
+  const effectiveView = useMemo<ViewState>(
+    () => ({ ...view, ...selectionToView(selection) }),
+    [view, selection]
+  );
+
   // Derived, sorted + filtered display list — what the grid and lightbox use.
-  const visibleItems = useMemo(() => applyView(lib.items, view), [lib.items, view]);
+  const visibleItems = useMemo(
+    () => applyView(lib.items, effectiveView),
+    [lib.items, effectiveView]
+  );
   const folders = useMemo(() => listFolders(lib.items), [lib.items]);
-  const favCount = useMemo(() => lib.items.filter((it) => it.favorite).length, [lib.items]);
   const dup = useMemo(() => findDuplicates(lib.items, dupKind), [lib.items, dupKind]);
+
+  // Per-section counts for the sidebar.
+  const counts = useMemo(() => {
+    const foldersC: Record<string, number> = {};
+    const collectionsC: Record<string, number> = {};
+    let favorites = 0;
+    for (const it of lib.items) {
+      if (it.favorite) favorites++;
+      const f = topFolder(it.relPath);
+      const key = f === "" ? ROOT_FOLDER : f;
+      foldersC[key] = (foldersC[key] ?? 0) + 1;
+      for (const c of it.collections) collectionsC[c] = (collectionsC[c] ?? 0) + 1;
+    }
+    return { all: lib.items.length, favorites, folders: foldersC, collections: collectionsC };
+  }, [lib.items]);
+
+  const selectionTitle = useMemo(() => {
+    switch (selection.kind) {
+      case "favorites":
+        return "즐겨찾기";
+      case "folder":
+        return selection.value === ROOT_FOLDER ? "최상위" : selection.value;
+      case "collection":
+        return lib.collections.find((c) => c.id === selection.id)?.name ?? "컬렉션";
+      default:
+        return "전체";
+    }
+  }, [selection, lib.collections]);
+
+  // If the selected collection/folder disappears, fall back to 전체.
+  useEffect(() => {
+    if (selection.kind === "collection" && !lib.collections.some((c) => c.id === selection.id)) {
+      setSelection({ kind: "all" });
+    }
+    if (
+      selection.kind === "folder" &&
+      !folders.some((f) => f.value === selection.value)
+    ) {
+      setSelection({ kind: "all" });
+    }
+  }, [selection, lib.collections, folders]);
 
   // In duplicate mode, the grid/lightbox operate on the grouped duplicate list.
   const activeItems = dupMode ? dup.ordered : visibleItems;
@@ -166,6 +226,22 @@ export default function App() {
     [activeItems]
   );
 
+  const onDropToFavorite = useCallback(
+    (id: string) => {
+      const it = lib.items.find((i) => i.id === id);
+      if (it && !it.favorite) lib.toggleFavorite(id);
+    },
+    [lib]
+  );
+  const onDropToCollection = useCallback(
+    (collectionId: string, id: string) => lib.addToCollection([id], collectionId),
+    [lib]
+  );
+  const resetView = useCallback(() => {
+    setView(DEFAULT_VIEW);
+    setSelection({ kind: "all" });
+  }, []);
+
   const editItem = editingId ? lib.items.find((it) => it.id === editingId) : undefined;
   const hasItems = lib.items.length > 0;
   const noResults = hasItems && !dupMode && visibleItems.length === 0;
@@ -197,86 +273,104 @@ export default function App() {
           />
         )}
 
-        {hasItems && showRestore && (
-          <RestoreBanner
-            count={lib.restoredCount}
-            onClear={() => {
-              setShowRestore(false);
-              lib.clear();
-            }}
-            onDismiss={() => setShowRestore(false)}
-          />
-        )}
-
-        {hasItems && (
-          <ControlBar
-            view={view}
-            onChange={patchView}
-            folders={folders}
-            shown={visibleItems.length}
-            total={lib.items.length}
-            favCount={favCount}
-            dupCount={dup.removableIds.size}
-            dupMode={dupMode}
-            onToggleDup={() => setDupMode((d) => !d)}
-          />
-        )}
-
-        {metaNotice !== null && (
-          <div className="animate-fade-up flex items-center gap-3 border-b border-sky-500/20 bg-sky-500/10 px-5 py-2.5">
-            <Info className="size-4 shrink-0 text-sky-300" />
-            <p className="min-w-0 flex-1 text-xs leading-relaxed text-slate-200">
-              메타 정보 <span className="font-semibold text-sky-200">{metaNotice.toLocaleString()}개</span>를 불러왔어요.
-              <span className="text-slate-400"> 원본 폴더를 다시 드롭하면 사진이 채워지고 즐겨찾기·정리 상태가 복원됩니다.</span>
-            </p>
-            <button
-              onClick={() => setMetaNotice(null)}
-              title="닫기"
-              className="grid size-7 shrink-0 place-items-center rounded-lg text-slate-500 transition-colors hover:bg-slate-800/70 hover:text-slate-300"
-            >
-              <X className="size-4" />
-            </button>
-          </div>
-        )}
-
-        {hasItems && dupMode && (
-          <DuplicateBar
-            groupCount={dup.groups.length}
-            removableCount={dup.removableIds.size}
-            kind={dupKind}
-            onKindChange={setDupKind}
-            onDeleteAll={() => lib.removeMany([...dup.removableIds])}
-            onExit={() => setDupMode(false)}
-          />
-        )}
-
-        <main className="relative min-h-0 flex-1">
-          {!lib.ready ? (
-            <div className="grid h-full place-items-center text-slate-500">
-              <div className="size-6 animate-spin rounded-full border-2 border-slate-700 border-t-sky-400" />
-            </div>
-          ) : !hasItems ? (
-            <EmptyState onPick={handlePick} onImport={handleImportClick} canPick={canPick} />
-          ) : noResults ? (
-            <div className="flex h-full flex-col items-center justify-center gap-3 text-slate-500">
-              <SearchX className="size-8" />
-              <p className="text-sm">조건에 맞는 이미지가 없습니다.</p>
-              <button
-                onClick={() => setView(DEFAULT_VIEW)}
-                className="text-xs text-sky-400 transition-colors hover:text-sky-300"
-              >
-                필터 초기화
-              </button>
-            </div>
-          ) : (
-            <Grid
-              items={activeItems}
-              onOpen={openById}
-              onToggleFavorite={lib.toggleFavorite}
-              badges={dupBadges}
+        <div className="flex min-h-0 flex-1">
+          {hasItems && (
+            <Sidebar
+              selection={selection}
+              onSelect={setSelection}
+              folders={folders}
+              collections={lib.collections}
+              counts={counts}
+              onCreateCollection={(name) => setSelection({ kind: "collection", id: lib.createCollection(name) })}
+              onRenameCollection={lib.renameCollection}
+              onDeleteCollection={lib.deleteCollection}
+              onDropToFavorite={onDropToFavorite}
+              onDropToCollection={onDropToCollection}
             />
           )}
-        </main>
+
+          <div className="flex min-h-0 flex-1 flex-col">
+            {hasItems && showRestore && (
+              <RestoreBanner
+                count={lib.restoredCount}
+                onClear={() => {
+                  setShowRestore(false);
+                  lib.clear();
+                }}
+                onDismiss={() => setShowRestore(false)}
+              />
+            )}
+
+            {hasItems && (
+              <ControlBar
+                view={view}
+                onChange={patchView}
+                title={selectionTitle}
+                shown={visibleItems.length}
+                total={lib.items.length}
+                dupCount={dup.removableIds.size}
+                dupMode={dupMode}
+                onToggleDup={() => setDupMode((d) => !d)}
+              />
+            )}
+
+            {metaNotice !== null && (
+              <div className="animate-fade-up flex items-center gap-3 border-b border-sky-500/20 bg-sky-500/10 px-5 py-2.5">
+                <Info className="size-4 shrink-0 text-sky-300" />
+                <p className="min-w-0 flex-1 text-xs leading-relaxed text-slate-200">
+                  메타 정보 <span className="font-semibold text-sky-200">{metaNotice.toLocaleString()}개</span>를 불러왔어요.
+                  <span className="text-slate-400"> 원본 폴더를 다시 드롭하면 사진이 채워지고 즐겨찾기·정리 상태가 복원됩니다.</span>
+                </p>
+                <button
+                  onClick={() => setMetaNotice(null)}
+                  title="닫기"
+                  className="grid size-7 shrink-0 place-items-center rounded-lg text-slate-500 transition-colors hover:bg-slate-800/70 hover:text-slate-300"
+                >
+                  <X className="size-4" />
+                </button>
+              </div>
+            )}
+
+            {hasItems && dupMode && (
+              <DuplicateBar
+                groupCount={dup.groups.length}
+                removableCount={dup.removableIds.size}
+                kind={dupKind}
+                onKindChange={setDupKind}
+                onDeleteAll={() => lib.removeMany([...dup.removableIds])}
+                onExit={() => setDupMode(false)}
+              />
+            )}
+
+            <main className="relative min-h-0 flex-1">
+              {!lib.ready ? (
+                <div className="grid h-full place-items-center text-slate-500">
+                  <div className="size-6 animate-spin rounded-full border-2 border-slate-700 border-t-sky-400" />
+                </div>
+              ) : !hasItems ? (
+                <EmptyState onPick={handlePick} onImport={handleImportClick} canPick={canPick} />
+              ) : noResults ? (
+                <div className="flex h-full flex-col items-center justify-center gap-3 text-slate-500">
+                  <SearchX className="size-8" />
+                  <p className="text-sm">여기엔 사진이 없습니다.</p>
+                  <button
+                    onClick={resetView}
+                    className="text-xs text-sky-400 transition-colors hover:text-sky-300"
+                  >
+                    전체 보기
+                  </button>
+                </div>
+              ) : (
+                <Grid
+                  items={activeItems}
+                  onOpen={openById}
+                  onToggleFavorite={lib.toggleFavorite}
+                  badges={dupBadges}
+                />
+              )}
+            </main>
+          </div>
+        </div>
 
         {!lib.supported && (
           <div className="glass absolute inset-x-0 bottom-0 z-30 flex items-center justify-center gap-2 border-t border-amber-500/20 px-4 py-2 text-xs text-amber-300/90">

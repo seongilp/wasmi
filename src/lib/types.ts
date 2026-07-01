@@ -1,5 +1,11 @@
 export type ImageStatus = "pending" | "ready" | "error";
 
+/** A user-created virtual folder that images can be dragged into. */
+export interface Collection {
+  id: string;
+  name: string;
+}
+
 export interface ImageItem {
   id: string;
   name: string;
@@ -19,6 +25,8 @@ export interface ImageItem {
   hash?: string;
   /** Perceptual hash (64-bit dHash, hex). Near-duplicates are a few bits apart. */
   phash?: string;
+  /** Ids of user collections this image belongs to. */
+  collections: string[];
   /** Object URL for the thumbnail (grid). Created on the main thread. */
   thumbUrl?: string;
 }
@@ -37,6 +45,7 @@ export interface ManifestItem {
   favorite?: boolean;
   hash?: string;
   phash?: string;
+  collections?: string[];
 }
 
 /** Message sent to the thumbnail worker. */

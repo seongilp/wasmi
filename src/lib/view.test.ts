@@ -3,6 +3,8 @@ import {
   applyView,
   listFolders,
   topFolder,
+  selectionToView,
+  selectionKey,
   ALL_FOLDERS,
   ROOT_FOLDER,
   type ViewState,
@@ -107,5 +109,36 @@ describe("applyView – filtering", () => {
     const items = [makeItem({ width: 0, height: 0, status: "pending" })];
     expect(applyView(items, { ...base, orientation: "landscape" })).toHaveLength(0);
     expect(applyView(items, { ...base, orientation: "all" })).toHaveLength(1);
+  });
+
+  it("filters by collection membership", () => {
+    const items = [
+      makeItem({ collections: ["c1"] }),
+      makeItem({ collections: ["c1", "c2"] }),
+      makeItem({ collections: [] }),
+    ];
+    expect(applyView(items, { ...base, collection: "c1" })).toHaveLength(2);
+    expect(applyView(items, { ...base, collection: "c2" })).toHaveLength(1);
+    expect(applyView(items, { ...base, collection: "none" })).toHaveLength(0);
+  });
+});
+
+describe("selection", () => {
+  it("maps selections to view filter fields", () => {
+    expect(selectionToView({ kind: "all" })).toEqual({
+      onlyFavorites: false,
+      folder: ALL_FOLDERS,
+      collection: undefined,
+    });
+    expect(selectionToView({ kind: "favorites" }).onlyFavorites).toBe(true);
+    expect(selectionToView({ kind: "folder", value: "trip" }).folder).toBe("trip");
+    expect(selectionToView({ kind: "collection", id: "c1" }).collection).toBe("c1");
+  });
+
+  it("builds stable keys for equality checks", () => {
+    expect(selectionKey({ kind: "all" })).toBe("all");
+    expect(selectionKey({ kind: "favorites" })).toBe("favorites");
+    expect(selectionKey({ kind: "folder", value: "a" })).toBe("folder:a");
+    expect(selectionKey({ kind: "collection", id: "c1" })).toBe("collection:c1");
   });
 });

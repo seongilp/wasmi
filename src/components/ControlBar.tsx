@@ -1,6 +1,4 @@
 import {
-  Star,
-  Folder,
   ArrowUpDown,
   ArrowUp,
   ArrowDown,
@@ -10,7 +8,6 @@ import {
 import { Dropdown, type DropdownOption } from "./ui/Dropdown";
 import { cn } from "@/lib/utils";
 import {
-  ALL_FOLDERS,
   ORIENTATION_LABELS,
   SORT_LABELS,
   type Orientation,
@@ -21,10 +18,9 @@ import {
 interface ControlBarProps {
   view: ViewState;
   onChange: (patch: Partial<ViewState>) => void;
-  folders: { value: string; label: string }[];
+  title: string;
   shown: number;
   total: number;
-  favCount: number;
   dupCount: number;
   dupMode: boolean;
   onToggleDup: () => void;
@@ -41,58 +37,25 @@ const orientationOptions: DropdownOption<Orientation>[] = (
 export function ControlBar({
   view,
   onChange,
-  folders,
+  title,
   shown,
   total,
-  favCount,
   dupCount,
   dupMode,
   onToggleDup,
 }: ControlBarProps) {
-  const folderOptions: DropdownOption<string>[] = [
-    { value: ALL_FOLDERS, label: "모든 폴더" },
-    ...folders,
-  ];
-
   return (
     <div className="glass sticky top-[60px] z-20 border-b border-slate-800/60">
       <div className="flex flex-wrap items-center gap-2 px-5 py-2.5">
-        {/* Favorites filter */}
-        <button
-          onClick={() => onChange({ onlyFavorites: !view.onlyFavorites })}
-          className={cn(
-            "flex h-8 items-center gap-1.5 rounded-lg border px-2.5 text-xs font-medium transition-colors duration-200 ease-spring",
-            view.onlyFavorites
-              ? "border-amber-400/40 bg-amber-400/15 text-amber-200"
-              : "border-slate-700/60 bg-slate-800/60 text-slate-200 hover:bg-slate-700/60"
-          )}
-        >
-          <Star
-            className={cn("size-3.5", view.onlyFavorites && "fill-amber-300 text-amber-300")}
-          />
-          즐겨찾기
-          {favCount > 0 && (
-            <span
-              className={cn(
-                "tabular-nums",
-                view.onlyFavorites ? "text-amber-300/80" : "text-slate-500"
-              )}
-            >
-              {favCount}
-            </span>
-          )}
-        </button>
-
-        {/* Folder filter (only when there's more than one group) */}
-        {folders.length >= 2 && (
-          <Dropdown
-            value={view.folder}
-            options={folderOptions}
-            onChange={(folder) => onChange({ folder })}
-            icon={Folder}
-            ariaLabel="폴더 필터"
-          />
-        )}
+        {/* Current selection title + count */}
+        <div className="mr-1 flex min-w-0 items-baseline gap-2">
+          <span className="truncate text-sm font-semibold text-slate-100">{title}</span>
+          <span className="shrink-0 text-xs tabular-nums text-slate-500">
+            {shown === total
+              ? `${total.toLocaleString()}`
+              : `${shown.toLocaleString()} / ${total.toLocaleString()}`}
+          </span>
+        </div>
 
         {/* Orientation filter */}
         <Dropdown
@@ -128,10 +91,6 @@ export function ControlBar({
             )}
           </button>
         )}
-
-        <div className="mx-1 hidden text-xs tabular-nums text-slate-500 sm:block">
-          {shown === total ? `${total.toLocaleString()}장` : `${shown.toLocaleString()} / ${total.toLocaleString()}`}
-        </div>
 
         {/* Sort — pushed to the right */}
         <div className="ml-auto flex items-center gap-2">

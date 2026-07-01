@@ -71,6 +71,7 @@ describe("exportMeta", () => {
     dominant: 0x123456,
     status: "ready",
     favorite: false,
+    collections: [],
     ...over,
   });
 

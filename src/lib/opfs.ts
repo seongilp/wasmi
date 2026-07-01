@@ -8,11 +8,12 @@
 // OPFS gives us fast, persistent, same-origin storage with no quota prompts
 // for reasonable sizes — perfect for an instant-reload image library.
 
-import type { ManifestItem } from "./types";
+import type { Collection, ManifestItem } from "./types";
 
 const THUMBS = "thumbs";
 const ORIGINALS = "originals";
 const MANIFEST = "manifest.json";
+const COLLECTIONS = "collections.json";
 
 export function opfsSupported(): boolean {
   return (
@@ -108,6 +109,27 @@ export async function writeManifest(items: ManifestItem[]): Promise<void> {
   await writable.close();
 }
 
+export async function readCollections(): Promise<Collection[]> {
+  try {
+    const r = await root();
+    const handle = await r.getFileHandle(COLLECTIONS, { create: false });
+    const parsed = JSON.parse(await (await handle.getFile()).text());
+    return Array.isArray(parsed) ? (parsed as Collection[]) : [];
+  } catch {
+    return [];
+  }
+}
+
+export async function writeCollections(collections: Collection[]): Promise<void> {
+  const r = await root();
+  const handle = await r.getFileHandle(COLLECTIONS, { create: true });
+  const writable = await handle.createWritable();
+  await writable.write(
+    new Blob([JSON.stringify(collections)], { type: "application/json" })
+  );
+  await writable.close();
+}
+
 /** Delete a single image's thumbnail + original from OPFS. */
 export async function deleteItem(id: string): Promise<void> {
   for (const dir of [THUMBS, ORIGINALS]) {
@@ -123,7 +145,7 @@ export async function deleteItem(id: string): Promise<void> {
 /** Delete everything we manage. Used by the "Clear library" action. */
 export async function clearAll(): Promise<void> {
   const r = await root();
-  for (const name of [THUMBS, ORIGINALS, MANIFEST]) {
+  for (const name of [THUMBS, ORIGINALS, MANIFEST, COLLECTIONS]) {
     try {
       await r.removeEntry(name, { recursive: true });
     } catch {

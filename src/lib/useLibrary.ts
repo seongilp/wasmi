@@ -6,15 +6,17 @@ import {
   ensurePersistent,
   estimateUsage,
   opfsSupported,
+  readCollections,
   readManifest,
   readOriginal,
   readThumb,
+  writeCollections,
   writeManifest,
 } from "./opfs";
 import type { Collected } from "./collect";
 import { exportLibrary, exportMeta as buildMetaBackup, importLibrary } from "./backup";
 import { fileKey } from "./utils";
-import type { ImageItem, ManifestItem, ThumbResponse } from "./types";
+import type { Collection, ImageItem, ManifestItem, ThumbResponse } from "./types";
 
 export interface ImportProgress {
   done: number;
@@ -29,6 +31,7 @@ export interface LibraryState {
   ready: boolean;
   supported: boolean;
   restoredCount: number;
+  collections: Collection[];
 }
 
 function toManifest(item: ImageItem): ManifestItem {
@@ -45,6 +48,7 @@ function toManifest(item: ImageItem): ManifestItem {
     favorite: item.favorite,
     hash: item.hash,
     phash: item.phash,
+    collections: item.collections,
   };
 }
 
@@ -54,6 +58,7 @@ export function useLibrary() {
   const [progress, setProgress] = useState<ImportProgress>({ done: 0, total: 0 });
   const [usage, setUsage] = useState(0);
   const [ready, setReady] = useState(false);
+  const [collections, setCollections] = useState<Collection[]>([]);
   // How many items were restored from OPFS at startup (drives the trust banner).
   const [restoredCount, setRestoredCount] = useState(0);
 
@@ -62,6 +67,7 @@ export function useLibrary() {
   // Authoritative copy mirrors `items` so async callbacks mutate the latest.
   const itemsRef = useRef<ImageItem[]>([]);
   const indexRef = useRef<Map<string, number>>(new Map());
+  const collectionsRef = useRef<Collection[]>([]);
   const poolRef = useRef<ThumbPool | null>(null);
   const flushScheduled = useRef(false);
 
@@ -102,7 +108,9 @@ export function useLibrary() {
   // first mount and after importing a backup.
   const restoreFromOpfs = useCallback(
     async (markRestored: boolean) => {
-      const manifest = await readManifest();
+      const [manifest, cols] = await Promise.all([readManifest(), readCollections()]);
+      collectionsRef.current = cols;
+      setCollections(cols);
       const restored: ImageItem[] = [];
       for (const m of manifest) {
         const thumb = await readThumb(m.id);
@@ -111,6 +119,7 @@ export function useLibrary() {
           favorite: m.favorite ?? false,
           hash: m.hash,
           phash: m.phash,
+          collections: m.collections ?? [],
           status: thumb ? "ready" : "pending",
           thumbUrl: thumb ? URL.createObjectURL(thumb) : undefined,
         });
@@ -209,6 +218,7 @@ export function useLibrary() {
             dominant: 0x1e293b, // slate-800 placeholder
             status: "pending",
             favorite: false,
+            collections: [],
           });
           jobs.push({ id, file });
         }
@@ -285,6 +295,89 @@ export function useLibrary() {
     [applyResult, getPool, persistManifest, refreshUsage]
   );
 
+  // ---- Collections ------------------------------------------------------
+  const persistCollections = useCallback(async () => {
+    await writeCollections(collectionsRef.current);
+  }, []);
+
+  const createCollection = useCallback(
+    (name: string): string => {
+      const trimmed = name.trim() || "새 컬렉션";
+      const id = `col-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
+      collectionsRef.current = [...collectionsRef.current, { id, name: trimmed }];
+      setCollections(collectionsRef.current);
+      persistCollections();
+      return id;
+    },
+    [persistCollections]
+  );
+
+  const renameCollection = useCallback(
+    (id: string, name: string) => {
+      const trimmed = name.trim();
+      if (!trimmed) return;
+      collectionsRef.current = collectionsRef.current.map((c) =>
+        c.id === id ? { ...c, name: trimmed } : c
+      );
+      setCollections(collectionsRef.current);
+      persistCollections();
+    },
+    [persistCollections]
+  );
+
+  const deleteCollection = useCallback(
+    (id: string) => {
+      collectionsRef.current = collectionsRef.current.filter((c) => c.id !== id);
+      setCollections(collectionsRef.current);
+      // Strip membership from every item.
+      let touched = false;
+      itemsRef.current = itemsRef.current.map((it) => {
+        if (!it.collections.includes(id)) return it;
+        touched = true;
+        return { ...it, collections: it.collections.filter((c) => c !== id) };
+      });
+      if (touched) {
+        setItems(itemsRef.current.slice());
+        persistManifest();
+      }
+      persistCollections();
+    },
+    [persistCollections, persistManifest]
+  );
+
+  const addToCollection = useCallback(
+    (ids: string[], collectionId: string) => {
+      const set = new Set(ids);
+      let touched = false;
+      itemsRef.current = itemsRef.current.map((it) => {
+        if (!set.has(it.id) || it.collections.includes(collectionId)) return it;
+        touched = true;
+        return { ...it, collections: [...it.collections, collectionId] };
+      });
+      if (touched) {
+        setItems(itemsRef.current.slice());
+        persistManifest();
+      }
+    },
+    [persistManifest]
+  );
+
+  const removeFromCollection = useCallback(
+    (id: string, collectionId: string) => {
+      const idx = indexRef.current.get(id);
+      if (idx === undefined) return;
+      const prev = itemsRef.current[idx];
+      if (!prev.collections.includes(collectionId)) return;
+      itemsRef.current[idx] = {
+        ...prev,
+        collections: prev.collections.filter((c) => c !== collectionId),
+      };
+      setItems(itemsRef.current.slice());
+      persistManifest();
+    },
+    [persistManifest]
+  );
+
   const removeItem = useCallback(
     async (id: string) => {
       const idx = indexRef.current.get(id);
@@ -325,6 +418,8 @@ export function useLibrary() {
     itemsRef.current = [];
     reindex();
     setItems([]);
+    collectionsRef.current = [];
+    setCollections([]);
     await clearAll();
     refreshUsage();
   }, [reindex, refreshUsage]);
@@ -353,6 +448,7 @@ export function useLibrary() {
     ready,
     supported,
     restoredCount,
+    collections,
   };
   return {
     ...state,
@@ -366,5 +462,10 @@ export function useLibrary() {
     exportBackup,
     exportMetaBackup,
     importBackup,
+    createCollection,
+    renameCollection,
+    deleteCollection,
+    addToCollection,
+    removeFromCollection,
   };
 }

@@ -18,10 +18,9 @@ function setup(overrides: Partial<Parameters<typeof ControlBar>[0]> = {}) {
     <ControlBar
       view={baseView}
       onChange={onChange}
-      folders={[]}
+      title="전체"
       shown={10}
       total={10}
-      favCount={2}
       dupCount={0}
       dupMode={false}
       onToggleDup={onToggleDup}
@@ -32,10 +31,9 @@ function setup(overrides: Partial<Parameters<typeof ControlBar>[0]> = {}) {
 }
 
 describe("ControlBar", () => {
-  it("toggles the favorites filter", () => {
-    const { onChange } = setup();
-    fireEvent.click(screen.getByRole("button", { name: /즐겨찾기/ }));
-    expect(onChange).toHaveBeenCalledWith({ onlyFavorites: true });
+  it("renders the current selection title", () => {
+    setup({ title: "여름휴가" });
+    expect(screen.getByText("여름휴가")).toBeInTheDocument();
   });
 
   it("flips sort direction", () => {
@@ -51,20 +49,16 @@ describe("ControlBar", () => {
     expect(onChange).toHaveBeenCalledWith({ sortKey: "name" });
   });
 
-  it("hides the folder dropdown when there are fewer than two folders", () => {
-    setup({ folders: [{ value: "a", label: "a" }] });
-    expect(screen.queryByLabelText("폴더 필터")).toBeNull();
-  });
-
-  it("shows the folder dropdown when there are two or more folders", () => {
-    setup({ folders: [{ value: "a", label: "a" }, { value: "b", label: "b" }] });
-    expect(screen.getByLabelText("폴더 필터")).toBeInTheDocument();
+  it("changes orientation via the dropdown", () => {
+    const { onChange } = setup();
+    fireEvent.click(screen.getByRole("button", { name: "방향 필터" }));
+    fireEvent.click(screen.getByText("세로"));
+    expect(onChange).toHaveBeenCalledWith({ orientation: "portrait" });
   });
 
   it("shows the duplicate button only when duplicates exist and toggles it", () => {
     const { onToggleDup } = setup({ dupCount: 3 });
-    const btn = screen.getByRole("button", { name: /중복/ });
-    fireEvent.click(btn);
+    fireEvent.click(screen.getByRole("button", { name: /중복/ }));
     expect(onToggleDup).toHaveBeenCalled();
   });
 

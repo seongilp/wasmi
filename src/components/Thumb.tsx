@@ -20,6 +20,11 @@ function ThumbBase({ item, size, onOpen, onToggleFavorite, badge }: ThumbProps) 
   return (
     <button
       onClick={() => item.status === "ready" && onOpen(item.id)}
+      draggable={item.status === "ready"}
+      onDragStart={(e) => {
+        e.dataTransfer.setData("application/x-wasmi-id", item.id);
+        e.dataTransfer.effectAllowed = "copy";
+      }}
       style={{ width: size, height: size, backgroundColor: bg }}
       className={cn(
         "group relative overflow-hidden rounded-2xl outline-none ring-1 transition-[transform,box-shadow] duration-300 ease-spring hover:z-10 hover:-translate-y-0.5 hover:shadow-2xl hover:shadow-black/50 focus-visible:ring-2 focus-visible:ring-sky-400",
