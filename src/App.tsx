@@ -18,10 +18,12 @@ import {
   listFolders,
   topFolder,
   selectionToView,
+  DENSITY_CELL,
   ALL_FOLDERS,
   ROOT_FOLDER,
   type ViewState,
   type Selection,
+  type Density,
 } from "./lib/view";
 import { findDuplicates, type DupMode } from "./lib/dedup";
 import type { ThumbBadge } from "./components/Thumb";
@@ -52,6 +54,7 @@ export default function App() {
   const [metaNotice, setMetaNotice] = useState<number | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [density, setDensity] = useState<Density>("md");
   const anchorRef = useRef<number | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const canPick = directoryPickerSupported();
@@ -406,6 +409,8 @@ export default function App() {
                 dupCount={dup.removableIds.size}
                 dupMode={dupMode}
                 onToggleDup={() => setDupMode((d) => !d)}
+                density={density}
+                onDensityChange={setDensity}
               />
             )}
 
@@ -485,6 +490,7 @@ export default function App() {
                   selectable={!dupMode}
                   selectedIds={selectedIds}
                   onSelect={handleSelect}
+                  minCell={DENSITY_CELL[density]}
                 />
               )}
             </main>

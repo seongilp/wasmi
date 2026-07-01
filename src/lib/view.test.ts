@@ -120,6 +120,18 @@ describe("applyView – filtering", () => {
     expect(applyView(items, { ...base, orientation: "all" })).toHaveLength(1);
   });
 
+  it("searches over filename and camera", () => {
+    const items = [
+      makeItem({ name: "beach.jpg" }),
+      makeItem({ name: "city.png", camera: "SONY A7" }),
+      makeItem({ name: "forest.png" }),
+    ];
+    expect(applyView(items, { ...base, query: "beach" })).toHaveLength(1);
+    expect(applyView(items, { ...base, query: "sony" })).toHaveLength(1); // camera match
+    expect(applyView(items, { ...base, query: "  " })).toHaveLength(3); // blank = no filter
+    expect(applyView(items, { ...base, query: "zzz" })).toHaveLength(0);
+  });
+
   it("filters by collection membership", () => {
     const items = [
       makeItem({ collections: ["c1"] }),

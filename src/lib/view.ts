@@ -4,6 +4,10 @@
 import type { ImageItem } from "./types";
 
 export type SortKey = "taken" | "date" | "name" | "size" | "res";
+export type Density = "sm" | "md" | "lg";
+
+/** Grid density → target minimum cell width (px). */
+export const DENSITY_CELL: Record<Density, number> = { sm: 120, md: 168, lg: 240 };
 export type SortDir = "asc" | "desc";
 export type Orientation = "all" | "landscape" | "portrait" | "square";
 
@@ -15,6 +19,8 @@ export interface ViewState {
   orientation: Orientation;
   /** When set, only images belonging to this user collection id. */
   collection?: string;
+  /** Free-text search over filename + camera. */
+  query?: string;
 }
 
 export const ALL_FOLDERS = "";
@@ -112,9 +118,13 @@ function compare(a: ImageItem, b: ImageItem, key: SortKey): number {
 
 /** Filter then sort — always returns a new array (never mutates input). */
 export function applyView(items: ImageItem[], v: ViewState): ImageItem[] {
+  const q = v.query?.trim().toLowerCase();
   const filtered = items.filter((it) => {
     if (v.onlyFavorites && !it.favorite) return false;
     if (v.collection && !it.collections.includes(v.collection)) return false;
+    if (q && !it.name.toLowerCase().includes(q) && !it.camera?.toLowerCase().includes(q)) {
+      return false;
+    }
     if (v.folder) {
       const f = topFolder(it.relPath);
       if (v.folder === ROOT_FOLDER ? f !== "" : f !== v.folder) return false;

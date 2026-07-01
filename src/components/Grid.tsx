@@ -11,10 +11,11 @@ interface GridProps {
   selectable?: boolean;
   selectedIds?: Set<string>;
   onSelect?: (id: string, e: React.MouseEvent) => void;
+  /** Target minimum cell width (grid density). */
+  minCell?: number;
 }
 
 const GAP = 14;
-const MIN_CELL = 168;
 const OVERSCAN_ROWS = 3;
 
 /**
@@ -29,6 +30,7 @@ export function Grid({
   selectable,
   selectedIds,
   onSelect,
+  minCell = 168,
 }: GridProps) {
   const { ref: outerRef, size } = useElementSize<HTMLDivElement>();
   const [scrollTop, setScrollTop] = useState(0);
@@ -37,8 +39,8 @@ export function Grid({
   const width = size.width;
   const height = size.height;
 
-  const cols = Math.max(1, Math.floor((width + GAP) / (MIN_CELL + GAP)));
-  const cell = cols > 0 ? (width - GAP * (cols - 1)) / cols : MIN_CELL;
+  const cols = Math.max(1, Math.floor((width + GAP) / (minCell + GAP)));
+  const cell = cols > 0 ? (width - GAP * (cols - 1)) / cols : minCell;
   const rowHeight = cell + GAP;
   const rowCount = Math.ceil(items.length / cols);
   const totalHeight = Math.max(0, rowCount * rowHeight - GAP);

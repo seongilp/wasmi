@@ -4,12 +4,18 @@ import {
   ArrowDown,
   RectangleHorizontal,
   Copy,
+  Search,
+  X,
+  Grid3x3,
+  LayoutGrid,
+  Grid2x2,
 } from "lucide-react";
 import { Dropdown, type DropdownOption } from "./ui/Dropdown";
 import { cn } from "@/lib/utils";
 import {
   ORIENTATION_LABELS,
   SORT_LABELS,
+  type Density,
   type Orientation,
   type SortKey,
   type ViewState,
@@ -24,7 +30,15 @@ interface ControlBarProps {
   dupCount: number;
   dupMode: boolean;
   onToggleDup: () => void;
+  density: Density;
+  onDensityChange: (d: Density) => void;
 }
+
+const DENSITIES: { value: Density; icon: typeof Grid3x3; label: string }[] = [
+  { value: "sm", icon: Grid3x3, label: "작게" },
+  { value: "md", icon: LayoutGrid, label: "보통" },
+  { value: "lg", icon: Grid2x2, label: "크게" },
+];
 
 const sortOptions: DropdownOption<SortKey>[] = (
   Object.keys(SORT_LABELS) as SortKey[]
@@ -43,7 +57,10 @@ export function ControlBar({
   dupCount,
   dupMode,
   onToggleDup,
+  density,
+  onDensityChange,
 }: ControlBarProps) {
+  const query = view.query ?? "";
   return (
     <div className="glass sticky top-[60px] z-20 border-b border-slate-800/60">
       <div className="flex flex-wrap items-center gap-2 px-5 py-2.5">
@@ -55,6 +72,27 @@ export function ControlBar({
               ? `${total.toLocaleString()}`
               : `${shown.toLocaleString()} / ${total.toLocaleString()}`}
           </span>
+        </div>
+
+        {/* Search */}
+        <div className="relative">
+          <Search className="pointer-events-none absolute left-2 top-1/2 size-3.5 -translate-y-1/2 text-slate-500" />
+          <input
+            value={query}
+            onChange={(e) => onChange({ query: e.target.value })}
+            placeholder="검색"
+            aria-label="검색"
+            className="h-8 w-28 rounded-lg border border-slate-700/60 bg-slate-800/60 pl-7 pr-6 text-xs text-slate-100 outline-none transition-[width] duration-200 placeholder:text-slate-500 focus:w-44 focus:border-slate-600"
+          />
+          {query && (
+            <button
+              onClick={() => onChange({ query: "" })}
+              aria-label="검색 지우기"
+              className="absolute right-1.5 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300"
+            >
+              <X className="size-3.5" />
+            </button>
+          )}
         </div>
 
         {/* Orientation filter */}
@@ -92,8 +130,26 @@ export function ControlBar({
           </button>
         )}
 
-        {/* Sort — pushed to the right */}
+        {/* Density + Sort — pushed to the right */}
         <div className="ml-auto flex items-center gap-2">
+          <div className="hidden rounded-lg border border-slate-700/60 bg-slate-800/60 p-0.5 sm:flex">
+            {DENSITIES.map((d) => (
+              <button
+                key={d.value}
+                onClick={() => onDensityChange(d.value)}
+                aria-label={`썸네일 ${d.label}`}
+                title={`썸네일 ${d.label}`}
+                className={cn(
+                  "grid size-7 place-items-center rounded-md transition-colors",
+                  density === d.value
+                    ? "bg-slate-700/70 text-slate-100"
+                    : "text-slate-400 hover:text-slate-200"
+                )}
+              >
+                <d.icon className="size-4" />
+              </button>
+            ))}
+          </div>
           <Dropdown
             value={view.sortKey}
             options={sortOptions}

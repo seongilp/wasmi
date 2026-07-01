@@ -14,6 +14,7 @@ const baseView: ViewState = {
 function setup(overrides: Partial<Parameters<typeof ControlBar>[0]> = {}) {
   const onChange = vi.fn();
   const onToggleDup = vi.fn();
+  const onDensityChange = vi.fn();
   render(
     <ControlBar
       view={baseView}
@@ -24,10 +25,12 @@ function setup(overrides: Partial<Parameters<typeof ControlBar>[0]> = {}) {
       dupCount={0}
       dupMode={false}
       onToggleDup={onToggleDup}
+      density="md"
+      onDensityChange={onDensityChange}
       {...overrides}
     />
   );
-  return { onChange, onToggleDup };
+  return { onChange, onToggleDup, onDensityChange };
 }
 
 describe("ControlBar", () => {
@@ -65,5 +68,17 @@ describe("ControlBar", () => {
   it("hides the duplicate button when there are no duplicates", () => {
     setup({ dupCount: 0 });
     expect(screen.queryByRole("button", { name: /중복/ })).toBeNull();
+  });
+
+  it("emits search query changes", () => {
+    const { onChange } = setup();
+    fireEvent.change(screen.getByLabelText("검색"), { target: { value: "beach" } });
+    expect(onChange).toHaveBeenCalledWith({ query: "beach" });
+  });
+
+  it("changes grid density", () => {
+    const { onDensityChange } = setup();
+    fireEvent.click(screen.getByRole("button", { name: "썸네일 크게" }));
+    expect(onDensityChange).toHaveBeenCalledWith("lg");
   });
 });
