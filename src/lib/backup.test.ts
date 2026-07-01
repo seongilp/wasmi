@@ -1,7 +1,7 @@
 // @vitest-environment node
 import { describe, it, expect } from "vitest";
-import { packContainer, unpackContainer, type BackupEntry } from "./backup";
-import type { ManifestItem } from "./types";
+import { packContainer, unpackContainer, exportMeta, type BackupEntry } from "./backup";
+import type { ImageItem, ManifestItem } from "./types";
 
 function meta(id: string): ManifestItem {
   return {
@@ -55,5 +55,39 @@ describe("backup container", () => {
   it("produces an empty container for no entries", async () => {
     const restored = unpackContainer(await packContainer([]).arrayBuffer());
     expect(restored).toEqual([]);
+  });
+});
+
+describe("exportMeta", () => {
+  const item = (over: Partial<ImageItem>): ImageItem => ({
+    id: "x",
+    name: "x.png",
+    relPath: "f/x.png",
+    type: "image/png",
+    size: 10,
+    lastModified: 1,
+    width: 100,
+    height: 80,
+    dominant: 0x123456,
+    status: "ready",
+    favorite: false,
+    ...over,
+  });
+
+  it("writes a JSON metadata backup with no image bytes", async () => {
+    const blob = exportMeta([item({ favorite: true, hash: "h1" })]);
+    expect(blob.type).toBe("application/json");
+    const parsed = JSON.parse(await blob.text());
+    expect(parsed.wasmi).toBe("meta");
+    expect(parsed.entries).toHaveLength(1);
+    expect(parsed.entries[0].favorite).toBe(true);
+    expect(parsed.entries[0].hash).toBe("h1");
+    // No pixel data in a meta backup.
+    expect(JSON.stringify(parsed)).not.toContain("thumb");
+  });
+
+  it("excludes items that are not ready", () => {
+    const blob = exportMeta([item({ status: "pending" })]);
+    return blob.text().then((t) => expect(JSON.parse(t).entries).toHaveLength(0));
   });
 });

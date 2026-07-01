@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { AlertTriangle, SearchX } from "lucide-react";
+import { AlertTriangle, SearchX, Info, X } from "lucide-react";
 import { Dropzone } from "./components/Dropzone";
 import { Toolbar } from "./components/Toolbar";
 import { ControlBar } from "./components/ControlBar";
@@ -37,6 +37,7 @@ export default function App() {
   const [dupKind, setDupKind] = useState<DupMode>("exact");
   const [editingId, setEditingId] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [metaNotice, setMetaNotice] = useState<number | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const canPick = directoryPickerSupported();
 
@@ -83,8 +84,8 @@ export default function App() {
     async (file: File) => {
       setBusy(true);
       try {
-        const n = await lib.importBackup(file);
-        console.info(`복원됨: ${n}장`);
+        const { mode, count } = await lib.importBackup(file);
+        setMetaNotice(mode === "meta" ? count : null);
       } catch (err) {
         alert(err instanceof Error ? err.message : "백업을 불러오지 못했습니다.");
       } finally {
@@ -104,27 +105,37 @@ export default function App() {
         return;
       }
       const collected = await collectFromDataTransfer(dt);
+      setMetaNotice(null); // photos are being re-attached
       lib.importFiles(collected);
     },
     [lib, importBackupFile]
   );
 
-  const handleExport = useCallback(async () => {
+  const download = (blob: Blob, name: string) => {
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = name;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+  const stamp = () => {
+    const d = new Date();
+    const p = (n: number) => String(n).padStart(2, "0");
+    return `${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())}-${p(d.getHours())}${p(d.getMinutes())}`;
+  };
+
+  const handleExportFull = useCallback(async () => {
     setBusy(true);
     try {
-      const blob = await lib.exportBackup();
-      const now = new Date();
-      const pad = (n: number) => String(n).padStart(2, "0");
-      const stamp = `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}-${pad(now.getHours())}${pad(now.getMinutes())}`;
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `wasmi-backup-${stamp}.wasmi`;
-      a.click();
-      URL.revokeObjectURL(url);
+      download(await lib.exportBackup(), `wasmi-backup-${stamp()}.wasmi`);
     } finally {
       setBusy(false);
     }
+  }, [lib]);
+
+  const handleExportMeta = useCallback(() => {
+    download(lib.exportMetaBackup(), `wasmi-meta-${stamp()}.wasmi`);
   }, [lib]);
 
   const handleImportClick = useCallback(() => fileInputRef.current?.click(), []);
@@ -178,7 +189,8 @@ export default function App() {
             canPick={canPick}
             onPick={handlePick}
             onClear={lib.clear}
-            onExport={handleExport}
+            onExportFull={handleExportFull}
+            onExportMeta={handleExportMeta}
             onImport={handleImportClick}
             busy={busy}
             workerCount={ThumbPool.defaultSize()}
@@ -208,6 +220,23 @@ export default function App() {
             dupMode={dupMode}
             onToggleDup={() => setDupMode((d) => !d)}
           />
+        )}
+
+        {metaNotice !== null && (
+          <div className="animate-fade-up flex items-center gap-3 border-b border-sky-500/20 bg-sky-500/10 px-5 py-2.5">
+            <Info className="size-4 shrink-0 text-sky-300" />
+            <p className="min-w-0 flex-1 text-xs leading-relaxed text-slate-200">
+              메타 정보 <span className="font-semibold text-sky-200">{metaNotice.toLocaleString()}개</span>를 불러왔어요.
+              <span className="text-slate-400"> 원본 폴더를 다시 드롭하면 사진이 채워지고 즐겨찾기·정리 상태가 복원됩니다.</span>
+            </p>
+            <button
+              onClick={() => setMetaNotice(null)}
+              title="닫기"
+              className="grid size-7 shrink-0 place-items-center rounded-lg text-slate-500 transition-colors hover:bg-slate-800/70 hover:text-slate-300"
+            >
+              <X className="size-4" />
+            </button>
+          </div>
         )}
 
         {hasItems && dupMode && (

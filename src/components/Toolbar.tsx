@@ -1,3 +1,4 @@
+import { useEffect, useRef, useState } from "react";
 import {
   FolderOpen,
   Trash2,
@@ -6,9 +7,11 @@ import {
   Cpu,
   Download,
   Upload,
+  HardDrive,
+  FileJson,
 } from "lucide-react";
 import { Button } from "./ui/button";
-import { formatBytes } from "@/lib/utils";
+import { cn, formatBytes } from "@/lib/utils";
 import type { ImportProgress } from "@/lib/useLibrary";
 
 interface ToolbarProps {
@@ -19,7 +22,8 @@ interface ToolbarProps {
   canPick: boolean;
   onPick: () => void;
   onClear: () => void;
-  onExport: () => void;
+  onExportFull: () => void;
+  onExportMeta: () => void;
   onImport: () => void;
   busy: boolean;
   workerCount: number;
@@ -33,7 +37,8 @@ export function Toolbar({
   canPick,
   onPick,
   onClear,
-  onExport,
+  onExportFull,
+  onExportMeta,
   onImport,
   busy,
   workerCount,
@@ -89,15 +94,7 @@ export function Toolbar({
           <Upload className="text-slate-400" />
         </Button>
         {count > 0 && (
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={onExport}
-            disabled={busy}
-            title="라이브러리 백업(내보내기)"
-          >
-            {busy ? <Loader2 className="animate-spin text-slate-400" /> : <Download className="text-slate-400" />}
-          </Button>
+          <ExportMenu busy={busy} onFull={onExportFull} onMeta={onExportMeta} />
         )}
         {canPick && (
           <Button variant="secondary" size="sm" onClick={onPick}>
@@ -112,5 +109,94 @@ export function Toolbar({
         )}
       </div>
     </header>
+  );
+}
+
+function ExportMenu({
+  busy,
+  onFull,
+  onMeta,
+}: {
+  busy: boolean;
+  onFull: () => void;
+  onMeta: () => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const onDown = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener("mousedown", onDown);
+    return () => document.removeEventListener("mousedown", onDown);
+  }, [open]);
+
+  const pick = (fn: () => void) => {
+    setOpen(false);
+    fn();
+  };
+
+  return (
+    <div ref={ref} className="relative">
+      <Button
+        variant="ghost"
+        size="icon"
+        onClick={() => setOpen((o) => !o)}
+        disabled={busy}
+        title="백업(내보내기)"
+      >
+        {busy ? (
+          <Loader2 className="animate-spin text-slate-400" />
+        ) : (
+          <Download className="text-slate-400" />
+        )}
+      </Button>
+
+      {open && (
+        <div className="glass animate-pop absolute right-0 z-40 mt-1.5 w-60 rounded-xl border border-slate-700/60 p-1 shadow-2xl shadow-black/50">
+          <MenuItem
+            icon={HardDrive}
+            title="전체 백업"
+            desc="사진 원본까지 · 어디서든 완전 복원"
+            onClick={() => pick(onFull)}
+          />
+          <MenuItem
+            icon={FileJson}
+            title="메타 정보만"
+            desc="즐겨찾기·정리 상태만 (작음). 복원 후 폴더 다시 드롭"
+            onClick={() => pick(onMeta)}
+          />
+        </div>
+      )}
+    </div>
+  );
+}
+
+function MenuItem({
+  icon: Icon,
+  title,
+  desc,
+  onClick,
+}: {
+  icon: typeof HardDrive;
+  title: string;
+  desc: string;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className={cn(
+        "flex w-full items-start gap-2.5 rounded-lg px-2.5 py-2 text-left transition-colors hover:bg-slate-800/70"
+      )}
+    >
+      <Icon className="mt-0.5 size-4 shrink-0 text-sky-400" />
+      <span className="min-w-0">
+        <span className="block text-xs font-semibold text-slate-100">{title}</span>
+        <span className="block text-[11px] leading-snug text-slate-400">{desc}</span>
+      </span>
+    </button>
   );
 }

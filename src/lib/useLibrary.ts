@@ -12,7 +12,7 @@ import {
   writeManifest,
 } from "./opfs";
 import type { Collected } from "./collect";
-import { exportLibrary, importLibrary } from "./backup";
+import { exportLibrary, exportMeta as buildMetaBackup, importLibrary } from "./backup";
 import { fileKey } from "./utils";
 import type { ImageItem, ManifestItem, ThumbResponse } from "./types";
 
@@ -182,18 +182,22 @@ export function useLibrary() {
     async (collected: Collected[]) => {
       if (collected.length === 0) return;
 
-      // Build new items, dedup against what we already have.
-      const existing = indexRef.current;
-      const fresh: { item: ImageItem; file: File }[] = [];
+      // Decide what to process. New files get a placeholder item; files that
+      // match an existing (e.g. meta-restored) placeholder are re-processed in
+      // place so favorites/organization survive.
+      const newItems: ImageItem[] = [];
+      const jobs: { id: string; file: File }[] = [];
+      const seen = new Set<string>();
       for (const { file, relPath } of collected) {
         const id = fileKey(relPath, file.size, file.lastModified);
-        if (existing.has(id)) {
-          const cur = itemsRef.current[existing.get(id)!];
-          if (cur.status === "ready") continue; // already cached
-        }
-        if (fresh.some((f) => f.item.id === id)) continue; // dup within drop
-        fresh.push({
-          item: {
+        if (seen.has(id)) continue; // dup within this drop
+        seen.add(id);
+        const existingIdx = indexRef.current.get(id);
+        if (existingIdx !== undefined) {
+          if (itemsRef.current[existingIdx].status === "ready") continue; // already have pixels
+          jobs.push({ id, file }); // fill existing placeholder, keep its favorite
+        } else {
+          newItems.push({
             id,
             name: file.name,
             relPath,
@@ -205,31 +209,33 @@ export function useLibrary() {
             dominant: 0x1e293b, // slate-800 placeholder
             status: "pending",
             favorite: false,
-          },
-          file,
-        });
+          });
+          jobs.push({ id, file });
+        }
       }
 
-      if (fresh.length === 0) return;
+      if (jobs.length === 0) return;
 
-      // Append pending items immediately so the grid fills with placeholders.
-      itemsRef.current = itemsRef.current.concat(fresh.map((f) => f.item));
-      reindex();
+      // Show placeholders immediately.
+      if (newItems.length > 0) {
+        itemsRef.current = itemsRef.current.concat(newItems);
+        reindex();
+      }
       setItems(itemsRef.current.slice());
 
       setImporting(true);
-      setProgress({ done: 0, total: fresh.length });
+      setProgress({ done: 0, total: jobs.length });
 
       const pool = getPool();
       let done = 0;
       await Promise.all(
-        fresh.map(({ item, file }) =>
+        jobs.map(({ id, file }) =>
           pool
-            .process({ id: item.id, file, persistOriginal: true })
+            .process({ id, file, persistOriginal: true })
             .then((res) => {
               applyResult(res);
               done++;
-              setProgress({ done, total: fresh.length });
+              setProgress({ done, total: jobs.length });
             })
         )
       );
@@ -328,12 +334,13 @@ export function useLibrary() {
   }, []);
 
   const exportBackup = useCallback(() => exportLibrary(itemsRef.current), []);
+  const exportMetaBackup = useCallback(() => buildMetaBackup(itemsRef.current), []);
 
   const importBackup = useCallback(
     async (file: File) => {
-      const count = await importLibrary(file);
+      const result = await importLibrary(file);
       await restoreFromOpfs(false);
-      return count;
+      return result;
     },
     [restoreFromOpfs]
   );
@@ -357,6 +364,7 @@ export function useLibrary() {
     removeMany,
     replaceItem,
     exportBackup,
+    exportMetaBackup,
     importBackup,
   };
 }
