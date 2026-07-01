@@ -60,7 +60,7 @@ describe("Sidebar", () => {
     };
     const row = screen.getByText("여름").closest('[role="button"]')!;
     fireEvent.drop(row, { dataTransfer });
-    expect(onDropToCollection).toHaveBeenCalledWith("c1", "img-42");
+    expect(onDropToCollection).toHaveBeenCalledWith("c1", ["img-42"]);
   });
 
   it("favorites a dropped image", () => {
@@ -72,6 +72,6 @@ describe("Sidebar", () => {
     };
     const row = screen.getByText("즐겨찾기").closest('[role="button"]')!;
     fireEvent.drop(row, { dataTransfer });
-    expect(onDropToFavorite).toHaveBeenCalledWith("img-7");
+    expect(onDropToFavorite).toHaveBeenCalledWith(["img-7"]);
   });
 });

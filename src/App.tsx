@@ -7,6 +7,7 @@ import { Grid } from "./components/Grid";
 import { EmptyState } from "./components/EmptyState";
 import { RestoreBanner } from "./components/RestoreBanner";
 import { DuplicateBar } from "./components/DuplicateBar";
+import { SelectionBar } from "./components/SelectionBar";
 import { Lightbox } from "./components/Lightbox";
 import { Editor } from "./components/Editor";
 import { Sidebar } from "./components/Sidebar";
@@ -49,6 +50,8 @@ export default function App() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [metaNotice, setMetaNotice] = useState<number | null>(null);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const anchorRef = useRef<number | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const canPick = directoryPickerSupported();
 
@@ -227,20 +230,80 @@ export default function App() {
   );
 
   const onDropToFavorite = useCallback(
-    (id: string) => {
-      const it = lib.items.find((i) => i.id === id);
-      if (it && !it.favorite) lib.toggleFavorite(id);
-    },
+    (ids: string[]) => lib.setFavoriteMany(ids, true),
     [lib]
   );
   const onDropToCollection = useCallback(
-    (collectionId: string, id: string) => lib.addToCollection([id], collectionId),
+    (collectionId: string, ids: string[]) => lib.addToCollection(ids, collectionId),
     [lib]
   );
   const resetView = useCallback(() => {
     setView(DEFAULT_VIEW);
     setSelection({ kind: "all" });
   }, []);
+
+  // ---- Multi-select ----------------------------------------------------
+  const clearSelection = useCallback(() => {
+    setSelectedIds(new Set());
+    anchorRef.current = null;
+  }, []);
+
+  const handleSelect = useCallback(
+    (id: string, e: React.MouseEvent) => {
+      const index = activeItems.findIndex((it) => it.id === id);
+      setSelectedIds((prev) => {
+        const next = new Set(prev);
+        if (e.shiftKey && anchorRef.current !== null) {
+          const [a, b] = [anchorRef.current, index].sort((x, y) => x - y);
+          for (let i = a; i <= b; i++) next.add(activeItems[i].id);
+        } else if (next.has(id)) {
+          next.delete(id);
+        } else {
+          next.add(id);
+        }
+        return next;
+      });
+      anchorRef.current = index;
+    },
+    [activeItems]
+  );
+
+  // Prune selection to ids that still exist; clear when switching sections.
+  useEffect(() => {
+    setSelectedIds((prev) => {
+      if (prev.size === 0) return prev;
+      const alive = new Set(lib.items.map((it) => it.id));
+      const next = new Set([...prev].filter((id) => alive.has(id)));
+      return next.size === prev.size ? prev : next;
+    });
+  }, [lib.items]);
+
+  useEffect(() => {
+    clearSelection();
+  }, [selection, clearSelection]);
+
+  // Esc clears selection when no overlay is open.
+  useEffect(() => {
+    if (selectedIds.size === 0 || lightboxIndex !== null || editingId !== null) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") clearSelection();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [selectedIds.size, lightboxIndex, editingId, clearSelection]);
+
+  const selArr = useMemo(() => [...selectedIds], [selectedIds]);
+
+  const bulkDelete = useCallback(() => {
+    const realCount = selArr.filter((id) => lib.hasHandle(id)).length;
+    const msg =
+      realCount > 0
+        ? `${selArr.length}장을 삭제합니다. 이 중 ${realCount}장은 원본 파일까지 영구 삭제돼요. 진행할까요?`
+        : `${selArr.length}장을 목록에서 제거할까요?`;
+    if (!confirm(msg)) return;
+    lib.removeMany(selArr);
+    clearSelection();
+  }, [selArr, lib, clearSelection]);
 
   // Delete one image — confirm when it will remove the real file on disk.
   const handleDelete = useCallback(
@@ -359,6 +422,27 @@ export default function App() {
               </div>
             )}
 
+            {hasItems && !dupMode && selectedIds.size > 0 && (
+              <SelectionBar
+                count={selectedIds.size}
+                collections={lib.collections}
+                onAddToCollection={(colId) => {
+                  lib.addToCollection(selArr, colId);
+                  clearSelection();
+                }}
+                onCreateAndAdd={(name) => {
+                  lib.addToCollection(selArr, lib.createCollection(name));
+                  clearSelection();
+                }}
+                onFavorite={() => {
+                  lib.setFavoriteMany(selArr, true);
+                  clearSelection();
+                }}
+                onDelete={bulkDelete}
+                onClear={clearSelection}
+              />
+            )}
+
             {hasItems && dupMode && (
               <DuplicateBar
                 groupCount={dup.groups.length}
@@ -394,6 +478,9 @@ export default function App() {
                   onOpen={openById}
                   onToggleFavorite={lib.toggleFavorite}
                   badges={dupBadges}
+                  selectable={!dupMode}
+                  selectedIds={selectedIds}
+                  onSelect={handleSelect}
                 />
               )}
             </main>

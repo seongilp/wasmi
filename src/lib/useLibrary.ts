@@ -367,6 +367,23 @@ export function useLibrary() {
     [persistManifest]
   );
 
+  const setFavoriteMany = useCallback(
+    (ids: string[], value: boolean) => {
+      const set = new Set(ids);
+      let touched = false;
+      itemsRef.current = itemsRef.current.map((it) => {
+        if (!set.has(it.id) || it.favorite === value) return it;
+        touched = true;
+        return { ...it, favorite: value };
+      });
+      if (touched) {
+        setItems(itemsRef.current.slice());
+        persistManifest();
+      }
+    },
+    [persistManifest]
+  );
+
   const removeFromCollection = useCallback(
     (id: string, collectionId: string) => {
       const idx = indexRef.current.get(id);
@@ -490,6 +507,7 @@ export function useLibrary() {
     deleteCollection,
     addToCollection,
     removeFromCollection,
+    setFavoriteMany,
     hasHandle,
   };
 }

@@ -47,4 +47,19 @@ describe("Thumb", () => {
     setup({}, { badge: "keep" });
     expect(screen.getByText("유지")).toBeInTheDocument();
   });
+
+  it("toggles selection via the checkbox without opening", () => {
+    const onSelect = vi.fn();
+    const item = setup({}, { selectable: true, onSelect }).item;
+    fireEvent.click(screen.getByLabelText("선택"));
+    expect(onSelect).toHaveBeenCalledWith(item.id, expect.anything());
+  });
+
+  it("selects (not opens) on modifier-click", () => {
+    const onSelect = vi.fn();
+    const { item, onOpen } = setup({}, { selectable: true, onSelect });
+    fireEvent.click(screen.getAllByRole("button")[0], { metaKey: true });
+    expect(onSelect).toHaveBeenCalledWith(item.id, expect.anything());
+    expect(onOpen).not.toHaveBeenCalled();
+  });
 });

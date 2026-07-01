@@ -1,5 +1,5 @@
 import { memo, useState } from "react";
-import { ImageOff, Star } from "lucide-react";
+import { ImageOff, Star, Check } from "lucide-react";
 import type { ImageItem } from "@/lib/types";
 import { cn, intToRgb } from "@/lib/utils";
 
@@ -11,28 +11,56 @@ interface ThumbProps {
   onOpen: (id: string) => void;
   onToggleFavorite: (id: string) => void;
   badge?: ThumbBadge;
+  /** Multi-select: provided only when selection is enabled (not in dup mode). */
+  selectable?: boolean;
+  selected?: boolean;
+  onSelect?: (id: string, e: React.MouseEvent) => void;
+  /** Ids to carry when dragging (all selected, or just this one). */
+  dragIds?: string[];
 }
 
-function ThumbBase({ item, size, onOpen, onToggleFavorite, badge }: ThumbProps) {
+function ThumbBase({
+  item,
+  size,
+  onOpen,
+  onToggleFavorite,
+  badge,
+  selectable,
+  selected,
+  onSelect,
+  dragIds,
+}: ThumbProps) {
   const [loaded, setLoaded] = useState(false);
   const bg = intToRgb(item.dominant || 0x1e293b);
 
   return (
     <button
-      onClick={() => item.status === "ready" && onOpen(item.id)}
+      onClick={(e) => {
+        if (selectable && (e.shiftKey || e.metaKey || e.ctrlKey)) {
+          onSelect?.(item.id, e);
+          return;
+        }
+        if (item.status === "ready") onOpen(item.id);
+      }}
       draggable={item.status === "ready"}
       onDragStart={(e) => {
+        const ids = dragIds && dragIds.length > 1 ? dragIds : [item.id];
         e.dataTransfer.setData("application/x-wasmi-id", item.id);
+        if (ids.length > 1) {
+          e.dataTransfer.setData("application/x-wasmi-ids", JSON.stringify(ids));
+        }
         e.dataTransfer.effectAllowed = "copy";
       }}
       style={{ width: size, height: size, backgroundColor: bg }}
       className={cn(
         "group relative overflow-hidden rounded-2xl outline-none ring-1 transition-[transform,box-shadow] duration-300 ease-spring hover:z-10 hover:-translate-y-0.5 hover:shadow-2xl hover:shadow-black/50 focus-visible:ring-2 focus-visible:ring-sky-400",
-        badge === "dupe"
-          ? "ring-2 ring-rose-500/70"
-          : badge === "keep"
-            ? "ring-2 ring-emerald-500/60"
-            : "ring-slate-800/80 hover:ring-slate-600"
+        selected
+          ? "ring-2 ring-sky-400"
+          : badge === "dupe"
+            ? "ring-2 ring-rose-500/70"
+            : badge === "keep"
+              ? "ring-2 ring-emerald-500/60"
+              : "ring-slate-800/80 hover:ring-slate-600"
       )}
     >
       {item.status === "error" ? (
@@ -56,6 +84,27 @@ function ThumbBase({ item, size, onOpen, onToggleFavorite, badge }: ThumbProps) 
       {/* Shimmer while pending */}
       {item.status === "pending" && (
         <div className="absolute inset-0 animate-pulse bg-gradient-to-br from-slate-800/40 to-slate-900/40" />
+      )}
+
+      {/* Multi-select checkbox — visible when selected, else on hover */}
+      {selectable && item.status === "ready" && (
+        <span
+          role="checkbox"
+          aria-checked={selected}
+          aria-label="선택"
+          onClick={(e) => {
+            e.stopPropagation();
+            onSelect?.(item.id, e);
+          }}
+          className={cn(
+            "absolute left-2 top-2 grid size-6 place-items-center rounded-full border-2 backdrop-blur-sm transition-all duration-200 ease-spring hover:scale-110",
+            selected
+              ? "border-sky-400 bg-sky-500 text-white opacity-100"
+              : "border-white/70 bg-black/25 text-transparent opacity-0 group-hover:opacity-100"
+          )}
+        >
+          <Check className="size-3.5" strokeWidth={3} />
+        </span>
       )}
 
       {/* Duplicate-mode badge */}

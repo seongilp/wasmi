@@ -29,11 +29,26 @@ interface SidebarProps {
   onCreateCollection: (name: string) => void;
   onRenameCollection: (id: string, name: string) => void;
   onDeleteCollection: (id: string) => void;
-  onDropToFavorite: (itemId: string) => void;
-  onDropToCollection: (collectionId: string, itemId: string) => void;
+  onDropToFavorite: (itemIds: string[]) => void;
+  onDropToCollection: (collectionId: string, itemIds: string[]) => void;
 }
 
 const DRAG_TYPE = "application/x-wasmi-id";
+const DRAG_TYPE_MULTI = "application/x-wasmi-ids";
+
+function readDragIds(dt: DataTransfer): string[] {
+  const multi = dt.getData(DRAG_TYPE_MULTI);
+  if (multi) {
+    try {
+      const arr = JSON.parse(multi);
+      if (Array.isArray(arr) && arr.length) return arr;
+    } catch {
+      /* fall through */
+    }
+  }
+  const single = dt.getData(DRAG_TYPE);
+  return single ? [single] : [];
+}
 
 export function Sidebar({
   selection,
@@ -69,7 +84,7 @@ export function Sidebar({
     setEditingId(null);
   };
 
-  const dropProps = (key: string, handle: (id: string) => void) => ({
+  const dropProps = (key: string, handle: (ids: string[]) => void) => ({
     onDragOver: (e: React.DragEvent) => {
       if (e.dataTransfer.types.includes(DRAG_TYPE)) {
         e.preventDefault();
@@ -80,9 +95,9 @@ export function Sidebar({
     onDragLeave: () => setDropKey((k) => (k === key ? null : k)),
     onDrop: (e: React.DragEvent) => {
       e.preventDefault();
-      const id = e.dataTransfer.getData(DRAG_TYPE);
+      const ids = readDragIds(e.dataTransfer);
       setDropKey(null);
-      if (id) handle(id);
+      if (ids.length) handle(ids);
     },
   });
 
@@ -197,7 +212,7 @@ export function Sidebar({
                     setEditName(c.name);
                   }}
                   dropTarget={dropKey === key}
-                  {...dropProps(key, (id) => onDropToCollection(c.id, id))}
+                  {...dropProps(key, (ids) => onDropToCollection(c.id, ids))}
                   trailing={
                     <button
                       onClick={(e) => {

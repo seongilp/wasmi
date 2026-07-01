@@ -8,6 +8,9 @@ interface GridProps {
   onOpen: (id: string) => void;
   onToggleFavorite: (id: string) => void;
   badges?: Map<string, ThumbBadge>;
+  selectable?: boolean;
+  selectedIds?: Set<string>;
+  onSelect?: (id: string, e: React.MouseEvent) => void;
 }
 
 const GAP = 14;
@@ -18,7 +21,15 @@ const OVERSCAN_ROWS = 3;
  * Windowed square grid. Only the rows intersecting the viewport (plus a small
  * overscan) are mounted, so a 10,000-image folder scrolls at 60fps.
  */
-export function Grid({ items, onOpen, onToggleFavorite, badges }: GridProps) {
+export function Grid({
+  items,
+  onOpen,
+  onToggleFavorite,
+  badges,
+  selectable,
+  selectedIds,
+  onSelect,
+}: GridProps) {
   const { ref: outerRef, size } = useElementSize<HTMLDivElement>();
   const [scrollTop, setScrollTop] = useState(0);
   const rafRef = useRef(0);
@@ -71,6 +82,10 @@ export function Grid({ items, onOpen, onToggleFavorite, badges }: GridProps) {
               onOpen={onOpen}
               onToggleFavorite={onToggleFavorite}
               badge={badges?.get(item.id)}
+              selectable={selectable}
+              selected={selectedIds?.has(item.id)}
+              onSelect={onSelect}
+              dragIds={selectedIds?.has(item.id) ? [...selectedIds] : undefined}
             />
           </div>
         );

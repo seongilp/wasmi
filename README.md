@@ -29,6 +29,7 @@ WASM으로 디코딩한 썸네일이 깔린 그리드(좌), OPFS에서 풀해상
 | **폴더 드롭** | `webkitGetAsEntry`로 중첩 폴더까지 재귀 수집. File System Access `showDirectoryPicker` 폴백 지원. (`src/lib/collect.ts`) |
 | **초고속 렌더** | CPU 코어 수만큼의 워커 풀 + 윈도잉(가상 스크롤) 그리드. 수천 장도 60fps. (`src/lib/thumb-pool.ts`, `src/components/Grid.tsx`) |
 | **사이드바 · 컬렉션** | 좌측 사이드바로 전체/즐겨찾기/폴더/컬렉션 탐색. 썸네일을 컬렉션·즐겨찾기로 **드래그**해 정리. 컬렉션 목록·소속을 OPFS에 영속화. (`src/components/Sidebar.tsx`, `src/lib/useLibrary.ts`) |
+| **다중 선택 · 일괄 작업** | 체크박스/⌘·Shift-클릭으로 여러 장 선택 → 컬렉션 담기·즐겨찾기·삭제 일괄 처리, 여러 장 한 번에 드래그. (`src/components/SelectionBar.tsx`) |
 | **정렬·분류·즐겨찾기** | 날짜/이름/크기/해상도 정렬, 방향 필터. (`src/lib/view.ts`, `src/components/ControlBar.tsx`) |
 | **중복 제거** | 콘텐츠 서명(동일 파일) + WASM dHash 지각 해시(유사 이미지) 감지. (`src/lib/dedup.ts`) |
 | **원본 삭제** | **폴더 선택**(File System Access)으로 열면 확인 후 **디스크 원본까지 영구 삭제**. 드래그드롭은 브라우저 제한상 목록·캐시에서만 제거(원본 유지). (`src/lib/collect.ts`, `useLibrary.removeItem`) |
