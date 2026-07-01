@@ -11,7 +11,7 @@ import { Lightbox } from "./components/Lightbox";
 import { useLibrary } from "./lib/useLibrary";
 import { ThumbPool } from "./lib/thumb-pool";
 import { applyView, listFolders, ALL_FOLDERS, type ViewState } from "./lib/view";
-import { findDuplicates } from "./lib/dedup";
+import { findDuplicates, type DupMode } from "./lib/dedup";
 import type { ThumbBadge } from "./components/Thumb";
 import {
   collectFromDataTransfer,
@@ -33,6 +33,7 @@ export default function App() {
   const [showRestore, setShowRestore] = useState(false);
   const [view, setView] = useState<ViewState>(DEFAULT_VIEW);
   const [dupMode, setDupMode] = useState(false);
+  const [dupKind, setDupKind] = useState<DupMode>("exact");
   const canPick = directoryPickerSupported();
 
   // Surface the trust banner once a restored-from-cache library is detected.
@@ -44,7 +45,7 @@ export default function App() {
   const visibleItems = useMemo(() => applyView(lib.items, view), [lib.items, view]);
   const folders = useMemo(() => listFolders(lib.items), [lib.items]);
   const favCount = useMemo(() => lib.items.filter((it) => it.favorite).length, [lib.items]);
-  const dup = useMemo(() => findDuplicates(lib.items), [lib.items]);
+  const dup = useMemo(() => findDuplicates(lib.items, dupKind), [lib.items, dupKind]);
 
   // In duplicate mode, the grid/lightbox operate on the grouped duplicate list.
   const activeItems = dupMode ? dup.ordered : visibleItems;
@@ -147,6 +148,8 @@ export default function App() {
           <DuplicateBar
             groupCount={dup.groups.length}
             removableCount={dup.removableIds.size}
+            kind={dupKind}
+            onKindChange={setDupKind}
             onDeleteAll={() => lib.removeMany([...dup.removableIds])}
             onExit={() => setDupMode(false)}
           />

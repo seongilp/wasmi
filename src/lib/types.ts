@@ -17,6 +17,8 @@ export interface ImageItem {
   favorite: boolean;
   /** Content signature (size + head/tail bytes). Identical files share it. */
   hash?: string;
+  /** Perceptual hash (64-bit dHash, hex). Near-duplicates are a few bits apart. */
+  phash?: string;
   /** Object URL for the thumbnail (grid). Created on the main thread. */
   thumbUrl?: string;
 }
@@ -34,6 +36,7 @@ export interface ManifestItem {
   /** Optional for backward compatibility with older manifests. */
   favorite?: boolean;
   hash?: string;
+  phash?: string;
 }
 
 /** Message sent to the thumbnail worker. */
@@ -53,6 +56,7 @@ export type ThumbResponse =
       height: number;
       dominant: number;
       hash: string;
+      phash: string;
       thumb: Blob;
     }
   | {

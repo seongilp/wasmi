@@ -22,6 +22,7 @@ interface WasmExports {
     dh: number
   ): void;
   dominantColor(srcPtr: number, pixels: number): number;
+  dhash(srcPtr: number, sw: number, sh: number, outPtr: number): void;
 }
 
 let wasmReady: Promise<WasmExports> | null = null;
@@ -102,7 +103,13 @@ async function fileSignature(file: File): Promise<string> {
 async function makeThumb(
   wasm: WasmExports,
   file: File
-): Promise<{ width: number; height: number; dominant: number; thumb: Blob }> {
+): Promise<{
+  width: number;
+  height: number;
+  dominant: number;
+  phash: string;
+  thumb: Blob;
+}> {
   const bmp = await createImageBitmap(file, { imageOrientation: "from-image" });
   const natW = bmp.width;
   const natH = bmp.height;
@@ -128,6 +135,15 @@ async function makeThumb(
   wasm.downscale(srcPtr, dw, dh, dstPtr, tw, th);
   const dominant = wasm.dominantColor(srcPtr, dw * dh);
 
+  // Perceptual hash (dHash) from the same source buffer.
+  const hashPtr = wasm.alloc(8);
+  wasm.dhash(srcPtr, dw, dh, hashPtr);
+  const words = new Uint32Array(wasm.memory.buffer, hashPtr, 2);
+  const phash =
+    (words[1] >>> 0).toString(16).padStart(8, "0") +
+    (words[0] >>> 0).toString(16).padStart(8, "0");
+  wasm.release(hashPtr);
+
   const out = new Uint8ClampedArray(dstLen);
   out.set(new Uint8Array(wasm.memory.buffer, dstPtr, dstLen));
   wasm.release(srcPtr);
@@ -138,14 +154,14 @@ async function makeThumb(
   tc.getContext("2d")!.putImageData(new ImageData(out, tw, th), 0, 0);
   const thumb = await tc.convertToBlob({ type: "image/webp", quality: 0.82 });
 
-  return { width: natW, height: natH, dominant, thumb };
+  return { width: natW, height: natH, dominant, phash, thumb };
 }
 
 self.onmessage = async (e: MessageEvent<ThumbRequest>) => {
   const { id, file, persistOriginal } = e.data;
   try {
     const wasm = await initWasm();
-    const [{ width, height, dominant, thumb }, hash] = await Promise.all([
+    const [{ width, height, dominant, phash, thumb }, hash] = await Promise.all([
       makeThumb(wasm, file),
       fileSignature(file),
     ]);
@@ -162,7 +178,7 @@ self.onmessage = async (e: MessageEvent<ThumbRequest>) => {
       /* no OPFS — in-memory only */
     }
 
-    const res: ThumbResponse = { id, ok: true, width, height, dominant, hash, thumb };
+    const res: ThumbResponse = { id, ok: true, width, height, dominant, hash, phash, thumb };
     self.postMessage(res);
   } catch (err) {
     const res: ThumbResponse = {

@@ -4,6 +4,11 @@
 
 import type { ImageItem } from "./types";
 
+export type DupMode = "exact" | "similar";
+
+/** Max dHash bit-distance to treat two images as near-duplicates. */
+export const SIMILAR_THRESHOLD = 8;
+
 export interface DupResult {
   /** Duplicate groups (each ≥ 2 items), keeper first. */
   groups: ImageItem[][];
@@ -23,20 +28,27 @@ function keeperRank(a: ImageItem, b: ImageItem): number {
   return a.name.localeCompare(b.name, "ko");
 }
 
-export function findDuplicates(items: ImageItem[]): DupResult {
-  const byHash = new Map<string, ImageItem[]>();
-  for (const it of items) {
-    if (it.status !== "ready" || !it.hash) continue;
-    const bucket = byHash.get(it.hash);
-    if (bucket) bucket.push(it);
-    else byHash.set(it.hash, [it]);
-  }
+function popcount(n: number): number {
+  n = n - ((n >>> 1) & 0x55555555);
+  n = (n & 0x33333333) + ((n >>> 2) & 0x33333333);
+  return (((n + (n >>> 4)) & 0x0f0f0f0f) * 0x01010101) >>> 24;
+}
 
+/** Bit distance between two 64-bit hex hashes (hi 8 chars + lo 8 chars). */
+function hamming(a: string, b: string): number {
+  const aHi = parseInt(a.slice(0, 8), 16);
+  const aLo = parseInt(a.slice(8, 16), 16);
+  const bHi = parseInt(b.slice(0, 8), 16);
+  const bLo = parseInt(b.slice(8, 16), 16);
+  return popcount(aHi ^ bHi) + popcount(aLo ^ bLo);
+}
+
+function buildGroups(clusters: Map<number, ImageItem[]>): DupResult {
   const groups: ImageItem[][] = [];
   const keeperIds = new Set<string>();
   const removableIds = new Set<string>();
 
-  for (const bucket of byHash.values()) {
+  for (const bucket of clusters.values()) {
     if (bucket.length < 2) continue;
     const sorted = [...bucket].sort(keeperRank);
     keeperIds.add(sorted[0].id);
@@ -48,4 +60,61 @@ export function findDuplicates(items: ImageItem[]): DupResult {
   groups.sort((a, b) => b.length - a.length);
   const ordered = groups.flat();
   return { groups, ordered, keeperIds, removableIds };
+}
+
+// Exact duplicates: group by content signature (identical bytes).
+function findExact(items: ImageItem[]): DupResult {
+  const byHash = new Map<string, ImageItem[]>();
+  for (const it of items) {
+    if (it.status !== "ready" || !it.hash) continue;
+    const bucket = byHash.get(it.hash);
+    if (bucket) bucket.push(it);
+    else byHash.set(it.hash, [it]);
+  }
+  // Map<string,...> → Map<number,...> for buildGroups; index is arbitrary.
+  const clusters = new Map<number, ImageItem[]>();
+  let i = 0;
+  for (const bucket of byHash.values()) clusters.set(i++, bucket);
+  return buildGroups(clusters);
+}
+
+// Near-duplicates: union-find clustering by perceptual-hash bit distance.
+function findSimilar(items: ImageItem[]): DupResult {
+  const pool = items.filter((it) => it.status === "ready" && it.phash);
+  const n = pool.length;
+  const parent = Array.from({ length: n }, (_, i) => i);
+  const find = (x: number): number => {
+    let root = x;
+    while (parent[root] !== root) root = parent[root];
+    while (parent[x] !== root) {
+      const next = parent[x];
+      parent[x] = root;
+      x = next;
+    }
+    return root;
+  };
+  const union = (a: number, b: number) => {
+    const ra = find(a);
+    const rb = find(b);
+    if (ra !== rb) parent[ra] = rb;
+  };
+
+  for (let i = 0; i < n; i++) {
+    for (let j = i + 1; j < n; j++) {
+      if (hamming(pool[i].phash!, pool[j].phash!) <= SIMILAR_THRESHOLD) union(i, j);
+    }
+  }
+
+  const clusters = new Map<number, ImageItem[]>();
+  for (let i = 0; i < n; i++) {
+    const root = find(i);
+    const bucket = clusters.get(root);
+    if (bucket) bucket.push(pool[i]);
+    else clusters.set(root, [pool[i]]);
+  }
+  return buildGroups(clusters);
+}
+
+export function findDuplicates(items: ImageItem[], mode: DupMode = "exact"): DupResult {
+  return mode === "similar" ? findSimilar(items) : findExact(items);
 }

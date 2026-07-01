@@ -69,6 +69,71 @@ export function downscale(
   }
 }
 
+// Average luminance of the source block that maps to grid cell (gx, gy) of a
+// GW×GH grid. Used to build the perceptual hash.
+function cellGray(
+  srcPtr: usize,
+  sw: i32,
+  sh: i32,
+  gx: i32,
+  gy: i32,
+  gw: i32,
+  gh: i32
+): f32 {
+  let sx0 = (gx * sw) / gw;
+  let sx1 = ((gx + 1) * sw) / gw;
+  if (sx1 <= sx0) sx1 = sx0 + 1;
+  let sy0 = (gy * sh) / gh;
+  let sy1 = ((gy + 1) * sh) / gh;
+  if (sy1 <= sy0) sy1 = sy0 + 1;
+
+  let sum: f32 = 0;
+  let n: i32 = 0;
+  for (let sy = sy0; sy < sy1; sy++) {
+    let rowBase = srcPtr + (<usize>(sy * sw)) * 4;
+    for (let sx = sx0; sx < sx1; sx++) {
+      let p = rowBase + (<usize>sx) * 4;
+      let r = <f32>load<u8>(p);
+      let g = <f32>load<u8>(p, 1);
+      let b = <f32>load<u8>(p, 2);
+      sum += 0.299 * r + 0.587 * g + 0.114 * b;
+      n++;
+    }
+  }
+  return sum / <f32>n;
+}
+
+/**
+ * 64-bit difference hash (dHash). Reduces the image to a 9×8 luminance grid and
+ * sets one bit per horizontal neighbor comparison. Perceptually similar images
+ * (resized, re-encoded, lightly edited) produce hashes a few bits apart, which
+ * lets the app find near-duplicates, not just byte-identical files.
+ *
+ * Writes two little-endian u32 words at `outPtr` (lo at +0, hi at +4).
+ */
+export function dhash(srcPtr: usize, sw: i32, sh: i32, outPtr: usize): void {
+  const GW = 9;
+  const GH = 8;
+  let lo: u32 = 0;
+  let hi: u32 = 0;
+  let bit = 0;
+
+  for (let gy = 0; gy < GH; gy++) {
+    for (let gx = 0; gx < GW - 1; gx++) {
+      let left = cellGray(srcPtr, sw, sh, gx, gy, GW, GH);
+      let right = cellGray(srcPtr, sw, sh, gx + 1, gy, GW, GH);
+      if (left > right) {
+        if (bit < 32) lo |= (<u32>1) << (<u32>bit);
+        else hi |= (<u32>1) << (<u32>(bit - 32));
+      }
+      bit++;
+    }
+  }
+
+  store<u32>(outPtr, lo);
+  store<u32>(outPtr, hi, 4);
+}
+
 /**
  * Compute the average (dominant) color of an RGBA buffer, packed as
  * 0x00RRGGBB. Sampled with a stride for speed on large images.

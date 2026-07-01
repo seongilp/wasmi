@@ -43,6 +43,7 @@ function toManifest(item: ImageItem): ManifestItem {
     dominant: item.dominant,
     favorite: item.favorite,
     hash: item.hash,
+    phash: item.phash,
   };
 }
 
@@ -113,6 +114,7 @@ export function useLibrary() {
           ...m,
           favorite: m.favorite ?? false,
           hash: m.hash,
+          phash: m.phash,
           status: thumb ? "ready" : "pending",
           thumbUrl: thumb ? URL.createObjectURL(thumb) : undefined,
         });
@@ -153,6 +155,7 @@ export function useLibrary() {
           height: res.height,
           dominant: res.dominant,
           hash: res.hash,
+          phash: res.phash,
           thumbUrl: URL.createObjectURL(res.thumb),
         };
       } else {
