@@ -27,6 +27,11 @@ export interface ImageItem {
   phash?: string;
   /** Ids of user collections this image belongs to. */
   collections: string[];
+  /** EXIF: capture time (ms), camera "Make Model", GPS coords. */
+  takenAt?: number;
+  camera?: string;
+  lat?: number;
+  lon?: number;
   /** Object URL for the thumbnail (grid). Created on the main thread. */
   thumbUrl?: string;
 }
@@ -46,6 +51,10 @@ export interface ManifestItem {
   hash?: string;
   phash?: string;
   collections?: string[];
+  takenAt?: number;
+  camera?: string;
+  lat?: number;
+  lon?: number;
 }
 
 /** Message sent to the thumbnail worker. */
@@ -66,6 +75,10 @@ export type ThumbResponse =
       dominant: number;
       hash: string;
       phash: string;
+      takenAt?: number;
+      camera?: string;
+      lat?: number;
+      lon?: number;
       thumb: Blob;
     }
   | {

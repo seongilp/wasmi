@@ -3,8 +3,20 @@
 // All heavy lifting happens here so the main thread never janks while the
 // user scrolls a freshly-dropped folder of thousands of images.
 
+import exifr from "exifr";
 import { writeThumb, writeOriginalStream } from "../lib/opfs";
+import { mapExif, EXIF_PICK, type Exif } from "../lib/exif";
 import type { ThumbRequest, ThumbResponse } from "../lib/types";
+
+// Best-effort EXIF extraction: capture date, camera, GPS. Non-EXIF formats
+// (PNG/webp/gif) just return an empty object.
+async function readExif(file: File): Promise<Exif> {
+  try {
+    return mapExif(await exifr.parse(file, { pick: EXIF_PICK, gps: true }));
+  } catch {
+    return {};
+  }
+}
 
 const THUMB_MAX = 320; // longest edge of the stored thumbnail
 const DECODE_MAX = 640; // longest edge fed into the WASM box filter
@@ -161,9 +173,10 @@ self.onmessage = async (e: MessageEvent<ThumbRequest>) => {
   const { id, file, persistOriginal } = e.data;
   try {
     const wasm = await initWasm();
-    const [{ width, height, dominant, phash, thumb }, hash] = await Promise.all([
+    const [{ width, height, dominant, phash, thumb }, hash, exif] = await Promise.all([
       makeThumb(wasm, file),
       fileSignature(file),
+      readExif(file),
     ]);
 
     // Persist results to OPFS for instant reloads. Persistence is best-effort:
@@ -178,7 +191,17 @@ self.onmessage = async (e: MessageEvent<ThumbRequest>) => {
       /* no OPFS — in-memory only */
     }
 
-    const res: ThumbResponse = { id, ok: true, width, height, dominant, hash, phash, thumb };
+    const res: ThumbResponse = {
+      id,
+      ok: true,
+      width,
+      height,
+      dominant,
+      hash,
+      phash,
+      thumb,
+      ...exif,
+    };
     self.postMessage(res);
   } catch (err) {
     const res: ThumbResponse = {

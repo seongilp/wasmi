@@ -10,10 +10,11 @@ import {
   Pencil,
   Play,
   Pause,
+  MapPin,
 } from "lucide-react";
 import type { ImageItem } from "@/lib/types";
 import { Button } from "./ui/button";
-import { cn, formatBytes, intToRgb } from "@/lib/utils";
+import { cn, formatBytes, formatDate, intToRgb } from "@/lib/utils";
 
 const SLIDESHOW_MS = 3500;
 
@@ -174,9 +175,23 @@ export function Lightbox({
           )}
           <p className="truncate text-xs text-slate-400">
             {item.width}×{item.height} · {formatBytes(item.size)} · {index + 1} / {items.length}
+            {item.takenAt && ` · ${formatDate(item.takenAt)}`}
+            {item.camera && ` · ${item.camera}`}
           </p>
         </div>
         <div className="flex items-center gap-2">
+          {item.lat !== undefined && item.lon !== undefined && (
+            <a
+              href={`https://www.google.com/maps?q=${item.lat},${item.lon}`}
+              target="_blank"
+              rel="noreferrer"
+              title="지도에서 보기"
+            >
+              <Button variant="ghost" size="icon" className="text-sky-300">
+                <MapPin />
+              </Button>
+            </a>
+          )}
           {items.length > 1 && (
             <Button
               variant="ghost"

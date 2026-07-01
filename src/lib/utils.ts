@@ -13,6 +13,13 @@ export function intToRgb(n: number): string {
   return `rgb(${r} ${g} ${b})`;
 }
 
+/** Format a ms timestamp as YYYY.MM.DD HH:mm. */
+export function formatDate(ms: number): string {
+  const d = new Date(ms);
+  const p = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}.${p(d.getMonth() + 1)}.${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`;
+}
+
 /** Human-readable byte size. */
 export function formatBytes(bytes: number): string {
   if (bytes === 0) return "0 B";

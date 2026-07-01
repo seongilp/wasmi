@@ -69,6 +69,15 @@ describe("applyView – sorting", () => {
     expect(r.map((i) => i.lastModified)).toEqual([1, 2, 3]);
   });
 
+  it("sorts by EXIF capture date, falling back to mtime", () => {
+    const x = makeItem({ name: "x", lastModified: 100, takenAt: 5000 });
+    const y = makeItem({ name: "y", lastModified: 200 }); // no EXIF → uses mtime 200
+    const z = makeItem({ name: "z", lastModified: 300, takenAt: 9000 });
+    const r = applyView([x, y, z], { ...base, sortKey: "taken", sortDir: "asc" });
+    // effective: y=200, x=5000, z=9000
+    expect(r.map((i) => i.name)).toEqual(["y", "x", "z"]);
+  });
+
   it("does not mutate the input array", () => {
     const snapshot = [...items];
     applyView(items, { ...base, sortKey: "size", sortDir: "desc" });

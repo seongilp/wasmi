@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { cn, intToRgb, formatBytes, fileKey } from "./utils";
+import { cn, intToRgb, formatBytes, fileKey, formatDate } from "./utils";
 
 describe("cn", () => {
   it("merges class names and resolves Tailwind conflicts", () => {
@@ -13,6 +13,14 @@ describe("intToRgb", () => {
     expect(intToRgb(0x336699)).toBe("rgb(51 102 153)");
     expect(intToRgb(0x000000)).toBe("rgb(0 0 0)");
     expect(intToRgb(0xffffff)).toBe("rgb(255 255 255)");
+  });
+});
+
+describe("formatDate", () => {
+  it("formats a timestamp as YYYY.MM.DD HH:mm", () => {
+    // Local-time construction so the assertion is timezone-independent.
+    const ms = new Date(2023, 6, 4, 9, 5).getTime(); // 2023-07-04 09:05
+    expect(formatDate(ms)).toBe("2023.07.04 09:05");
   });
 });
 

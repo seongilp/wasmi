@@ -3,7 +3,7 @@
 
 import type { ImageItem } from "./types";
 
-export type SortKey = "date" | "name" | "size" | "res";
+export type SortKey = "taken" | "date" | "name" | "size" | "res";
 export type SortDir = "asc" | "desc";
 export type Orientation = "all" | "landscape" | "portrait" | "square";
 
@@ -51,7 +51,8 @@ export function selectionToView(s: Selection): Pick<
 }
 
 export const SORT_LABELS: Record<SortKey, string> = {
-  date: "날짜",
+  taken: "촬영일",
+  date: "수정일",
   name: "이름",
   size: "크기",
   res: "해상도",
@@ -100,6 +101,9 @@ function compare(a: ImageItem, b: ImageItem, key: SortKey): number {
       return a.size - b.size;
     case "res":
       return a.width * a.height - b.width * b.height;
+    case "taken":
+      // Fall back to file mtime when a photo has no EXIF capture date.
+      return (a.takenAt ?? a.lastModified) - (b.takenAt ?? b.lastModified);
     case "date":
     default:
       return a.lastModified - b.lastModified;

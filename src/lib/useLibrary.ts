@@ -50,6 +50,10 @@ function toManifest(item: ImageItem): ManifestItem {
     hash: item.hash,
     phash: item.phash,
     collections: item.collections,
+    takenAt: item.takenAt,
+    camera: item.camera,
+    lat: item.lat,
+    lon: item.lon,
   };
 }
 
@@ -132,6 +136,10 @@ export function useLibrary() {
           hash: m.hash,
           phash: m.phash,
           collections: m.collections ?? [],
+          takenAt: m.takenAt,
+          camera: m.camera,
+          lat: m.lat,
+          lon: m.lon,
           status: thumb ? "ready" : "pending",
           thumbUrl: thumb ? URL.createObjectURL(thumb) : undefined,
         });
@@ -189,6 +197,10 @@ export function useLibrary() {
           dominant: res.dominant,
           hash: res.hash,
           phash: res.phash,
+          takenAt: res.takenAt,
+          camera: res.camera,
+          lat: res.lat,
+          lon: res.lon,
           thumbUrl: URL.createObjectURL(res.thumb),
         };
       } else {
