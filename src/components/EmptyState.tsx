@@ -40,6 +40,13 @@ export function EmptyState({ onPick, onImport, canPick }: EmptyStateProps) {
         </Button>
       </div>
 
+      {canPick && (
+        <p className="mt-4 max-w-md text-center text-xs leading-relaxed text-slate-500">
+          <span className="text-slate-400">폴더 선택</span>으로 열면 원본 파일까지 삭제·관리할 수 있어요.
+          드래그드롭은 빠른 뷰어(원본은 그대로).
+        </p>
+      )}
+
       <div className="mt-12 grid w-full max-w-2xl grid-cols-1 gap-3 sm:grid-cols-3">
         {features.map((f) => (
           <div

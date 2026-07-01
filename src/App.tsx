@@ -242,6 +242,34 @@ export default function App() {
     setSelection({ kind: "all" });
   }, []);
 
+  // Delete one image — confirm when it will remove the real file on disk.
+  const handleDelete = useCallback(
+    (id: string) => {
+      if (lib.hasHandle(id)) {
+        if (!confirm("원본 파일을 디스크에서 영구 삭제합니다. 되돌릴 수 없어요. 진행할까요?")) {
+          return;
+        }
+      }
+      lib.removeItem(id);
+    },
+    [lib]
+  );
+
+  const handleDeleteDupes = useCallback(() => {
+    const ids = [...dup.removableIds];
+    const realCount = ids.filter((id) => lib.hasHandle(id)).length;
+    if (realCount > 0) {
+      if (
+        !confirm(
+          `${ids.length}장을 삭제합니다. 이 중 ${realCount}장은 원본 파일까지 영구 삭제돼요. 진행할까요?`
+        )
+      ) {
+        return;
+      }
+    }
+    lib.removeMany(ids);
+  }, [dup.removableIds, lib]);
+
   const editItem = editingId ? lib.items.find((it) => it.id === editingId) : undefined;
   const hasItems = lib.items.length > 0;
   const noResults = hasItems && !dupMode && visibleItems.length === 0;
@@ -337,7 +365,7 @@ export default function App() {
                 removableCount={dup.removableIds.size}
                 kind={dupKind}
                 onKindChange={setDupKind}
-                onDeleteAll={() => lib.removeMany([...dup.removableIds])}
+                onDeleteAll={handleDeleteDupes}
                 onExit={() => setDupMode(false)}
               />
             )}
@@ -388,8 +416,9 @@ export default function App() {
           onNavigate={setLightboxIndex}
           loadOriginal={lib.openOriginal}
           onToggleFavorite={lib.toggleFavorite}
-          onDelete={lib.removeItem}
+          onDelete={handleDelete}
           onEdit={setEditingId}
+          canDeleteReal={lib.hasHandle(activeItems[lightboxIndex].id)}
           paused={editingId !== null}
         />
       )}

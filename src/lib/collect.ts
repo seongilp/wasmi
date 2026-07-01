@@ -5,6 +5,8 @@
 export interface Collected {
   file: File;
   relPath: string;
+  /** Parent directory handle (only from the picker) — enables real deletion. */
+  parent?: FileSystemDirectoryHandle;
 }
 
 const IMAGE_EXT = new Set([
@@ -107,7 +109,8 @@ async function walkHandle(
     const relPath = prefix ? `${prefix}/${name}` : name;
     if (handle.kind === "file") {
       const file = await (handle as FileSystemFileHandle).getFile();
-      if (isImage(file.name, file.type)) out.push({ file, relPath });
+      // `parent` lets us delete the real file later (dir.removeEntry(name)).
+      if (isImage(file.name, file.type)) out.push({ file, relPath, parent: dir });
     } else {
       await walkHandle(handle as FileSystemDirectoryHandle, relPath, out);
     }
@@ -116,9 +119,10 @@ async function walkHandle(
 
 export async function collectFromDirectoryPicker(): Promise<Collected[]> {
   const pick = (window as unknown as {
-    showDirectoryPicker: () => Promise<FileSystemDirectoryHandle>;
+    showDirectoryPicker: (opts?: { mode?: "read" | "readwrite" }) => Promise<FileSystemDirectoryHandle>;
   }).showDirectoryPicker;
-  const dir = await pick();
+  // Request read-write so the user can delete originals from within the app.
+  const dir = await pick({ mode: "readwrite" });
   const out: Collected[] = [];
   await walkHandle(dir, dir.name, out);
   return out;

@@ -22,6 +22,8 @@ interface LightboxProps {
   onToggleFavorite: (id: string) => void;
   onDelete: (id: string) => void;
   onEdit: (id: string) => void;
+  /** True when deleting removes the real file on disk (picker imports). */
+  canDeleteReal?: boolean;
   /** When true (e.g. the editor is open), keyboard shortcuts are suspended. */
   paused?: boolean;
 }
@@ -35,6 +37,7 @@ export function Lightbox({
   onToggleFavorite,
   onDelete,
   onEdit,
+  canDeleteReal = false,
   paused = false,
 }: LightboxProps) {
   const item = items[index];
@@ -143,7 +146,7 @@ export function Lightbox({
             variant="ghost"
             size="icon"
             onClick={() => onDelete(item.id)}
-            title="삭제 (Del)"
+            title={canDeleteReal ? "원본 파일 삭제 (Del)" : "목록에서 제거 (Del)"}
             className="hover:text-rose-300"
           >
             <Trash2 />

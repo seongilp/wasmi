@@ -68,6 +68,10 @@ export function useLibrary() {
   const itemsRef = useRef<ImageItem[]>([]);
   const indexRef = useRef<Map<string, number>>(new Map());
   const collectionsRef = useRef<Collection[]>([]);
+  // Parent-directory handles for picker imports → real (on-disk) deletion.
+  const handlesRef = useRef<Map<string, { parent: FileSystemDirectoryHandle; name: string }>>(
+    new Map()
+  );
   const poolRef = useRef<ThumbPool | null>(null);
   const flushScheduled = useRef(false);
 
@@ -197,10 +201,11 @@ export function useLibrary() {
       const newItems: ImageItem[] = [];
       const jobs: { id: string; file: File }[] = [];
       const seen = new Set<string>();
-      for (const { file, relPath } of collected) {
+      for (const { file, relPath, parent } of collected) {
         const id = fileKey(relPath, file.size, file.lastModified);
         if (seen.has(id)) continue; // dup within this drop
         seen.add(id);
+        if (parent) handlesRef.current.set(id, { parent, name: file.name });
         const existingIdx = indexRef.current.get(id);
         if (existingIdx !== undefined) {
           if (itemsRef.current[existingIdx].status === "ready") continue; // already have pixels
@@ -378,6 +383,21 @@ export function useLibrary() {
     [persistManifest]
   );
 
+  // Whether an item can be deleted from disk (imported via the picker).
+  const hasHandle = useCallback((id: string) => handlesRef.current.has(id), []);
+
+  // Best-effort deletion of the real file on disk (File System Access).
+  const deleteRealFile = useCallback(async (id: string) => {
+    const h = handlesRef.current.get(id);
+    if (!h) return;
+    try {
+      await h.parent.removeEntry(h.name);
+    } catch {
+      /* permission denied or already gone */
+    }
+    handlesRef.current.delete(id);
+  }, []);
+
   const removeItem = useCallback(
     async (id: string) => {
       const idx = indexRef.current.get(id);
@@ -387,11 +407,12 @@ export function useLibrary() {
       itemsRef.current = itemsRef.current.filter((it) => it.id !== id);
       reindex();
       setItems(itemsRef.current.slice());
+      await deleteRealFile(id);
       await deleteItem(id);
       await persistManifest();
       refreshUsage();
     },
-    [persistManifest, reindex, refreshUsage]
+    [deleteRealFile, persistManifest, reindex, refreshUsage]
   );
 
   const removeMany = useCallback(
@@ -404,11 +425,12 @@ export function useLibrary() {
       itemsRef.current = itemsRef.current.filter((it) => !set.has(it.id));
       reindex();
       setItems(itemsRef.current.slice());
+      await Promise.all(ids.map((id) => deleteRealFile(id)));
       await Promise.all(ids.map((id) => deleteItem(id)));
       await persistManifest();
       refreshUsage();
     },
-    [persistManifest, reindex, refreshUsage]
+    [deleteRealFile, persistManifest, reindex, refreshUsage]
   );
 
   const clear = useCallback(async () => {
@@ -420,6 +442,7 @@ export function useLibrary() {
     setItems([]);
     collectionsRef.current = [];
     setCollections([]);
+    handlesRef.current.clear();
     await clearAll();
     refreshUsage();
   }, [reindex, refreshUsage]);
@@ -467,5 +490,6 @@ export function useLibrary() {
     deleteCollection,
     addToCollection,
     removeFromCollection,
+    hasHandle,
   };
 }
